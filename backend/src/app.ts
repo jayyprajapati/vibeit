@@ -1,12 +1,20 @@
 import express, { NextFunction, Request, Response } from "express";
+import cors from "cors";
+import authRoutes from "./routes/authRoutes";
+import { authMiddleware } from "./middleware/authMiddleware";
+import { getMe } from "./controllers/authController";
 
 const app = express();
 
+app.use(cors());
 app.use(express.json());
 
 app.get("/health", (_: Request, res: Response) => {
   res.json({ status: "ok" });
 });
+
+app.use("/auth", authRoutes);
+app.get("/me", authMiddleware, getMe);
 
 // Catch-all for unknown routes so errors flow through the central handler.
 app.use((_: Request, res: Response, next: NextFunction) => {
