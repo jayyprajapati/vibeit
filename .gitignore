@@ -1,0 +1,73 @@
+############################
+# OS / Editor Noise
+############################
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.log
+
+############################
+# Environment Files
+############################
+.env
+.env.*
+!.env.example
+
+############################
+# Node.js (Backend)
+############################
+backend/node_modules/
+backend/dist/
+backend/.cache/
+backend/npm-debug.log*
+backend/yarn-error.log*
+
+############################
+# Flutter / Dart (Frontend)
+############################
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/.pub-cache/
+frontend/build/
+
+############################
+# Flutter Platform Builds
+############################
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/android/key.properties
+frontend/android/app/build/
+
+frontend/ios/Flutter/Flutter.framework
+frontend/ios/Flutter/Flutter.podspec
+frontend/ios/Flutter/App.framework
+frontend/ios/Flutter/Generated.xcconfig
+frontend/ios/Flutter/ephemeral/
+frontend/ios/Pods/
+frontend/ios/.symlinks/
+frontend/ios/Runner.xcworkspace/
+
+############################
+# Web / Desktop (if enabled later)
+############################
+frontend/web/.dart_tool/
+frontend/macos/Pods/
+frontend/windows/flutter/ephemeral/
+frontend/linux/flutter/ephemeral/
+
+############################
+# Coverage / Test Artifacts
+############################
+coverage/
+*.lcov
+
+############################
+# Temporary / Misc
+############################
+tmp/
+temp/
