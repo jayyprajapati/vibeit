@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
+import 'models/playlist.dart';
 import 'models/user_profile.dart';
 
 class ApiClient {
@@ -45,6 +46,71 @@ class ApiClient {
 
     final data = _decode(resp);
     return UserProfile.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
+  Future<List<Playlist>> getPlaylists(String token) async {
+    final uri = Uri.parse('$baseUrl/playlists');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    final list = (data['playlists'] as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+    return list.map(Playlist.fromJson).toList();
+  }
+
+  Future<Playlist> createPlaylist(String token, String name) async {
+    final uri = Uri.parse('$baseUrl/playlists');
+    final resp = await _client.post(
+      uri,
+      headers: _headers(token: token),
+      body: jsonEncode({'name': name}),
+    );
+
+    final data = _decode(resp);
+    return Playlist.fromJson(data['playlist'] as Map<String, dynamic>);
+  }
+
+  Future<Playlist> getPlaylist(String token, String playlistId) async {
+    final uri = Uri.parse('$baseUrl/playlists/$playlistId');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return Playlist.fromJson(data['playlist'] as Map<String, dynamic>);
+  }
+
+  Future<Playlist> addTrack(
+    String token,
+    String playlistId,
+    TrackPayload track,
+  ) async {
+    final uri = Uri.parse('$baseUrl/playlists/$playlistId/tracks');
+    final resp = await _client.post(
+      uri,
+      headers: _headers(token: token),
+      body: jsonEncode(track.toJson()),
+    );
+
+    final data = _decode(resp);
+    return Playlist.fromJson(data['playlist'] as Map<String, dynamic>);
+  }
+
+  Future<Playlist> removeTrack(
+    String token,
+    String playlistId,
+    String trackId,
+  ) async {
+    final uri = Uri.parse('$baseUrl/playlists/$playlistId/tracks/$trackId');
+    final resp = await _client.delete(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return Playlist.fromJson(data['playlist'] as Map<String, dynamic>);
+  }
+
+  Future<List<TrackItem>> searchTracks(String token, String query) async {
+    final uri = Uri.parse(
+      '$baseUrl/search/tracks?q=${Uri.encodeQueryComponent(query)}',
+    );
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    final list = (data['tracks'] as List<dynamic>).cast<Map<String, dynamic>>();
+    return list.map(TrackItem.fromJson).toList();
   }
 
   Map<String, String> _headers({String? token}) {

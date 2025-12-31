@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers.dart';
 import '../auth/email_screen.dart';
+import '../playlists/playlist_home.dart';
 import '../auth/auth_controller.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -44,7 +45,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   @override
   Widget build(BuildContext context) {
     final pages = <Widget>[
-      const _HomeTab(),
+      const PlaylistHomeTab(),
       const _PlatformsTab(),
       const _ProfileTab(),
     ];
@@ -63,31 +64,6 @@ class _MainShellState extends ConsumerState<MainShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HomeTab extends StatelessWidget {
-  const _HomeTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Welcome to VibeIt',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Your home feed will live here. For now, explore the tabs to see your account info.',
-            style: TextStyle(color: Colors.grey),
           ),
         ],
       ),

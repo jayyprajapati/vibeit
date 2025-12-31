@@ -11,7 +11,7 @@ const otpSchema = new Schema<IOtp>(
   {
     email: { type: String, required: true, lowercase: true, trim: true, index: true },
     otpHash: { type: String, required: true },
-    expiresAt: { type: Date, required: true, index: true },
+    expiresAt: { type: Date, required: true },
     createdAt: { type: Date, default: Date.now },
   },
   {
