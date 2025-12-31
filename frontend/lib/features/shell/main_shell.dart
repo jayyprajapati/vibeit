@@ -5,6 +5,7 @@ import '../../providers.dart';
 import '../auth/email_screen.dart';
 import '../playlists/playlist_home.dart';
 import '../auth/auth_controller.dart';
+import '../platforms/spotify_tab.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
@@ -46,7 +47,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       const PlaylistHomeTab(),
-      const _PlatformsTab(),
+      const PlatformsTab(),
       const _ProfileTab(),
     ];
 
@@ -64,31 +65,6 @@ class _MainShellState extends ConsumerState<MainShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
             label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _PlatformsTab extends StatelessWidget {
-  const _PlatformsTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.all(24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Platforms',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Platform integrations will appear here. This screen is static for now.',
-            style: TextStyle(color: Colors.grey),
           ),
         ],
       ),

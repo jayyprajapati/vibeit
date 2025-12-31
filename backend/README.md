@@ -23,6 +23,10 @@ Dev server runs on `PORT` (default 3000) and hot-reloads via ts-node-dev.
 - `MONGO_URI` — Mongo connection string (default local)
 - `JWT_SECRET` — signing secret for auth tokens (set this in prod)
 - `OTP_EXPIRY_MINUTES` — numeric minutes until OTP expires (default 5)
+- `SPOTIFY_CLIENT_ID` — Spotify app client id
+- `SPOTIFY_CLIENT_SECRET` — Spotify app client secret
+- `SPOTIFY_REDIRECT_URI` — backend callback registered in Spotify (e.g. http://localhost:3000/spotify/callback)
+- `SPOTIFY_FRONTEND_REDIRECT` — where to send the user after a successful/failed Spotify auth (e.g. http://localhost:5173/platforms)
 
 ## API
 All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <token>`.
@@ -61,6 +65,19 @@ All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <toke
 - `GET /search/tracks?q=<query>`
    - headers: auth required
    - returns: `{ "tracks": [ { id, title, artist, album, duration } ] }` (results are filtered from a hardcoded list)
+
+### Spotify (read-only)
+- `GET /spotify/auth-url`
+   - headers: auth required
+   - returns: `{ "url": "https://accounts.spotify.com/..." }` (open in browser)
+- `GET /spotify/callback`
+   - handles Spotify redirect, stores tokens, then redirects to `SPOTIFY_FRONTEND_REDIRECT`
+- `GET /spotify/playlists`
+   - headers: auth required
+   - returns cached playlists if fetched within the last 24h, otherwise refreshes from Spotify and updates the cache
+- `POST /spotify/sync-now`
+   - headers: auth required
+   - forces an immediate refresh from Spotify and updates cache + timestamps
 
 ## Failure Tips
 - 401/403: ensure you pass `Authorization: Bearer <token>` from `/auth/verify-otp`.

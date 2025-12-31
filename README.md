@@ -3,8 +3,8 @@
 Flutter + Node/Express stack for OTP auth and an internal playlist system (no external music services).
 
 ## What's inside
-- `backend/` — TypeScript Express API with OTP login, playlists, and mock track search
-- `frontend/` — Flutter app (Riverpod) for auth + playlists UI
+- `backend/` — TypeScript Express API with OTP login, playlists, Spotify OAuth (read-only), and mock track search
+- `frontend/` — Flutter app (Riverpod) for auth, playlists UI, and Spotify playlists viewer
 
 ## Quick start
 Backend:
@@ -19,7 +19,8 @@ Frontend:
 ## App flow (high level)
 - Request OTP → Verify OTP → token saved
 - Playlists tab: create/list/open playlists; add tracks via mock search; remove tracks; play buttons are disabled with a tooltip
-- Profile tab shows account data; Platforms tab is a placeholder
+- Platforms tab: connect Spotify (Authorization Code flow), view cached playlists (24h TTL), manually sync when needed; cache is used if refresh fails
+- Profile tab shows account data
 
 ## If something breaks
 - Backend 500/connection issues: check server logs and `MONGO_URI`; ensure server is running

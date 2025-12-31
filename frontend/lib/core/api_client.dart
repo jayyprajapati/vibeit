@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'models/playlist.dart';
+import 'models/spotify.dart';
 import 'models/user_profile.dart';
 
 class ApiClient {
@@ -111,6 +112,27 @@ class ApiClient {
     final data = _decode(resp);
     final list = (data['tracks'] as List<dynamic>).cast<Map<String, dynamic>>();
     return list.map(TrackItem.fromJson).toList();
+  }
+
+  Future<SpotifyAuthUrl> getSpotifyAuthUrl(String token) async {
+    final uri = Uri.parse('$baseUrl/spotify/auth-url');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return SpotifyAuthUrl(data['url'] as String);
+  }
+
+  Future<SpotifyPlaylistsPayload> getSpotifyPlaylists(String token) async {
+    final uri = Uri.parse('$baseUrl/spotify/playlists');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return SpotifyPlaylistsPayload.fromJson(data);
+  }
+
+  Future<SpotifyPlaylistsPayload> syncSpotifyPlaylists(String token) async {
+    final uri = Uri.parse('$baseUrl/spotify/sync-now');
+    final resp = await _client.post(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return SpotifyPlaylistsPayload.fromJson(data);
   }
 
   Map<String, String> _headers({String? token}) {

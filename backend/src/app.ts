@@ -3,6 +3,7 @@ import cors from "cors";
 import authRoutes from "./routes/authRoutes";
 import playlistRoutes from "./routes/playlistRoutes";
 import searchRoutes from "./routes/searchRoutes";
+import spotifyRoutes from "./routes/spotifyRoutes";
 import { authMiddleware } from "./middleware/authMiddleware";
 import { getMe } from "./controllers/authController";
 
@@ -19,6 +20,7 @@ app.use("/auth", authRoutes);
 app.get("/me", authMiddleware, getMe);
 app.use("/playlists", playlistRoutes);
 app.use("/search", searchRoutes);
+app.use("/spotify", spotifyRoutes);
 
 // Catch-all for unknown routes so errors flow through the central handler.
 app.use((_: Request, res: Response, next: NextFunction) => {
