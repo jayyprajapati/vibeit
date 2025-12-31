@@ -19,7 +19,7 @@ class VibeitApp extends StatelessWidget {
         colorScheme: base.colorScheme.copyWith(
           primary: green,
           secondary: const Color(0xFF6B9080),
-          background: surface,
+          surface: surface,
         ),
         appBarTheme: const AppBarTheme(backgroundColor: surface, elevation: 0),
         elevatedButtonTheme: ElevatedButtonThemeData(
