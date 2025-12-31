@@ -25,8 +25,17 @@ Dev server runs on `PORT` (default 3000) and hot-reloads via ts-node-dev.
 - `OTP_EXPIRY_MINUTES` — numeric minutes until OTP expires (default 5)
 - `SPOTIFY_CLIENT_ID` — Spotify app client id
 - `SPOTIFY_CLIENT_SECRET` — Spotify app client secret
-- `SPOTIFY_REDIRECT_URI` — backend callback registered in Spotify (e.g. http://localhost:3000/spotify/callback)
+- `SPOTIFY_REDIRECT_URI` — backend callback registered in Spotify (e.g. https://<ngrok-id>.ngrok-free.app/spotify/callback)
 - `SPOTIFY_FRONTEND_REDIRECT` — where to send the user after a successful/failed Spotify auth (e.g. http://localhost:5173/platforms)
+
+Note: Spotify does not accept plain `http://` redirect URIs for production or some dev accounts; use a secure `https://` URL. For local development you can expose your local backend via ngrok and use the generated `https://<ngrok-id>.ngrok-free.app` domain as `SPOTIFY_REDIRECT_URI` and Spotify App Redirect URL.
+
+Example ngrok flow:
+1. Run your backend locally: `npm run dev` (server on port 3000)
+2. Run `ngrok http 3000` to get a public HTTPS URL (e.g., `https://abcd1234.ngrok-free.app`).
+3. In the Spotify Developer Dashboard, set your app's Redirect URI to `https://<ngrok-id>.ngrok-free.app/spotify/callback` and save.
+4. Set `SPOTIFY_REDIRECT_URI` in your backend `.env` to match the ngrok URL and restart the server.
+5. Ensure your Flutter `apiBaseUrl` points to your backend (if you run your mobile app on a device/emulator, use the ngrok URL for public access).
 
 ## API
 All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <token>`.
