@@ -3,7 +3,6 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/models/spotify.dart';
 import '../../providers.dart';
-import '../auth/auth_controller.dart';
 import 'spotify_repository.dart';
 
 class SpotifyState {
@@ -136,7 +135,7 @@ class SpotifyController extends StateNotifier<AsyncValue<SpotifyState>> {
       state = AsyncValue.data(SpotifyState.fromPayload(payload));
     } catch (err) {
       state = AsyncValue.data(previous.copyWith(isSyncing: false));
-      throw err;
+      rethrow;
     }
   }
 
@@ -165,7 +164,7 @@ class SpotifyController extends StateNotifier<AsyncValue<SpotifyState>> {
         message: err.toString(),
       );
       state = AsyncValue.data(next);
-      throw err;
+      rethrow;
     }
   }
 

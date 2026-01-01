@@ -139,7 +139,7 @@ class _ConnectedContent extends StatelessWidget {
   String _formatTimestamp(DateTime? dt) {
     if (dt == null) return 'Not synced yet';
     final local = dt.toLocal();
-    final two = (int v) => v.toString().padLeft(2, '0');
+    two(int v) => v.toString().padLeft(2, '0');
     return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 

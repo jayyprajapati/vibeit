@@ -2,7 +2,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/playlist.dart';
 import '../../providers.dart';
-import '../auth/auth_controller.dart';
 import 'playlist_repository.dart';
 
 class PlaylistController extends StateNotifier<AsyncValue<List<Playlist>>> {
@@ -49,7 +48,7 @@ class PlaylistController extends StateNotifier<AsyncValue<List<Playlist>>> {
       final current = state.valueOrNull ?? <Playlist>[];
       state = AsyncValue.data([playlist, ...current]);
       return playlist;
-    } catch (err, st) {
+    } catch (err) {
       state = previous;
       rethrow;
     }

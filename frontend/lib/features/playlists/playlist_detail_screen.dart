@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../core/models/playlist.dart';
 import 'playlist_controller.dart';
 import 'track_search_screen.dart';
 
