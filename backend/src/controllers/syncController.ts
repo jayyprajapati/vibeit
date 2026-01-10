@@ -182,7 +182,7 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
       return res.status(400).json({ error: "Playlist name must exist on both platforms" });
     }
 
-    const { common, toAdd, toRemove } = await getTrackSets(
+    const { common, toAdd, toRemove, spotifyPlaylist, ytmPlaylist } = await getTrackSets(
       direction,
       spotifyAccessToken,
       ytmAccessToken,
@@ -190,7 +190,17 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
       ytmId
     );
 
-    const resolvedAdds: NormalizedTrack[] = [];
+    const sourceCount = direction === "SPOTIFY_TO_YTM" ? spotifyPlaylist.tracks.length : ytmPlaylist.tracks.length;
+    const destinationCount = direction === "SPOTIFY_TO_YTM" ? ytmPlaylist.tracks.length : spotifyPlaylist.tracks.length;
+    console.info("[sync][preview] counts", {
+      direction,
+      sourceCount,
+      destinationCount,
+      toAdd: toAdd.length,
+      toRemove: toRemove.length,
+    });
+
+    const catalogResolvedAdds: NormalizedTrack[] = [];
     const skippedTracks: Array<{ title: string; artist: string; reason: string; normalizedTitle: string }> = [];
 
     for (const track of toAdd) {
@@ -200,15 +210,15 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
           : await searchSpotifyTrackExact(spotifyAccessToken, track.title, track.artist);
 
       if (matchId) {
-        resolvedAdds.push(track);
+        catalogResolvedAdds.push(track);
       } else {
         skippedTracks.push({
           title: track.title,
           artist: track.artist,
           normalizedTitle: track.normalizedTitle,
-          reason: "NO_EXACT_MATCH",
+          reason: "NO_CATALOG_MATCH",
         });
-        console.warn("[sync][preview] skip no exact match", {
+        console.warn("[sync][preview] skip no catalog match", {
           title: track.title,
           normalizedTitle: track.normalizedTitle,
           artist: track.artist,
@@ -216,13 +226,32 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
       }
     }
 
-    const caseLabel = computeCase(resolvedAdds, toRemove);
+    console.info("[sync][preview] catalog resolution", {
+      matches: catalogResolvedAdds.length,
+      skipped: skippedTracks.length,
+    });
+
+    const caseLabel = computeCase(toAdd, toRemove);
 
     return res.json({
       case: caseLabel,
+      note: "Tracks will be searched in the destination platform catalog before adding.",
+      summary: {
+        sourceCount,
+        destinationCount,
+        toAddCount: toAdd.length,
+        toRemoveCount: toRemove.length,
+        catalogMatches: catalogResolvedAdds.length,
+        catalogSkips: skippedTracks.length,
+      },
+    
       common: common.map(toPublicTrack),
-      toAdd: resolvedAdds.map(toPublicTrack),
+      // Candidates needing catalog resolution (diff result)
+      toAddCandidates: toAdd.map(toPublicTrack),
+      // Tracks that matched a catalog entry and would be added
+      toAdd: catalogResolvedAdds.map(toPublicTrack),
       toRemove: toRemove.map(toPublicTrack),
+      catalogResolvedAdds: catalogResolvedAdds.map(toPublicTrack),
       skippedTracks,
     });
   } catch (error) {
@@ -273,17 +302,29 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
       ytmId
     );
 
-    // Resolve adds
+    const sourceCount = direction === "SPOTIFY_TO_YTM" ? spotifyPlaylist.tracks.length : ytmPlaylist.tracks.length;
+    const destinationCount = direction === "SPOTIFY_TO_YTM" ? ytmPlaylist.tracks.length : spotifyPlaylist.tracks.length;
+    console.info("[sync][execute] counts", {
+      direction,
+      sourceCount,
+      destinationCount,
+      toAdd: toAdd.length,
+      toRemove: toRemove.length,
+      mode,
+    });
+
+    // Resolve adds via destination catalog search only for toAdd
     const skippedTracks: Array<{ title: string; artist: string; reason: string; normalizedTitle?: string }> = [];
     const addedUris: string[] = [];
     const addedVideoIds: string[] = [];
+    let catalogMatches = 0;
 
     for (const track of toAdd) {
       if (direction === "SPOTIFY_TO_YTM") {
         const videoId = await searchYtmTrackExact(ytmAccessToken, track.title, track.artist);
         if (!videoId) {
-          skippedTracks.push({ ...toPublicTrack(track), normalizedTitle: track.normalizedTitle, reason: "NO_EXACT_MATCH" });
-          console.warn("[sync][execute] skip no exact match", {
+          skippedTracks.push({ ...toPublicTrack(track), normalizedTitle: track.normalizedTitle, reason: "NO_CATALOG_MATCH" });
+          console.warn("[sync][execute] skip no catalog match", {
             title: track.title,
             normalizedTitle: track.normalizedTitle,
             artist: track.artist,
@@ -291,11 +332,12 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
           continue;
         }
         addedVideoIds.push(videoId);
+        catalogMatches += 1;
       } else {
         const uri = await searchSpotifyTrackExact(spotifyAccessToken, track.title, track.artist);
         if (!uri) {
-          skippedTracks.push({ ...toPublicTrack(track), normalizedTitle: track.normalizedTitle, reason: "NO_EXACT_MATCH" });
-          console.warn("[sync][execute] skip no exact match", {
+          skippedTracks.push({ ...toPublicTrack(track), normalizedTitle: track.normalizedTitle, reason: "NO_CATALOG_MATCH" });
+          console.warn("[sync][execute] skip no catalog match", {
             title: track.title,
             normalizedTitle: track.normalizedTitle,
             artist: track.artist,
@@ -303,8 +345,14 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
           continue;
         }
         addedUris.push(uri);
+        catalogMatches += 1;
       }
     }
+
+    console.info("[sync][execute] catalog resolution", {
+      matches: catalogMatches,
+      skipped: skippedTracks.length,
+    });
 
     // Resolve removals if FULL_SYNC
     const toRemoveUris: string[] = [];

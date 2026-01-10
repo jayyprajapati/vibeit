@@ -1,5 +1,5 @@
 import env from "../config/env";
-import { normalizeArtist, normalizeTitle, trackIdentity } from "./trackNormalization";
+import { findBestMatch, tokenizeArtist, tokenizeTitle } from "./catalogMatch";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -232,13 +232,20 @@ export const searchYtmTrackExact = async (
   title: string,
   artist: string
 ): Promise<string | null> => {
-  const normalizedTitle = normalizeTitle(title);
-  const normalizedArtist = normalizeArtist(artist);
+  const titleTokens = tokenizeTitle(title);
+  if (titleTokens.length === 0) return null;
+
+  const artistTokens = tokenizeArtist(artist);
+  const queryTokens = [...titleTokens, ...artistTokens];
+  if (queryTokens.length === 0) return null;
+
+  console.log(`YTM Search for tokens: ${queryTokens.join(" ")}`);
   const params = new URLSearchParams({
     part: "snippet",
-    q: `${normalizedTitle} ${artist}`,
+    q: queryTokens.join(" "),
     type: "video",
-    maxResults: "5",
+    videoCategoryId: "10",
+    maxResults: "10",
   });
 
   const url = `${API_BASE_URL}/search?${params.toString()}`;
@@ -250,24 +257,22 @@ export const searchYtmTrackExact = async (
   }
 
   const data = (await resp.json()) as Record<string, unknown>;
+  console.log("YTM Search Response :", JSON.stringify(data));
   const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
 
-  for (const item of items) {
-    const snippet = item["snippet"] as Record<string, unknown> | undefined;
-    const vid = (item["id"] as Record<string, unknown> | undefined)?.["videoId"] as string | undefined;
-    const name = (snippet?.["title"] as string | undefined)?.trim().toLowerCase();
-    const channel = (snippet?.["channelTitle"] as string | undefined)?.trim().toLowerCase();
-    if (
-      vid &&
-      name &&
-      channel &&
-      trackIdentity(name, channel) === `${normalizedTitle}::${normalizedArtist}`
-    ) {
-      return vid;
-    }
-  }
+  const candidates = items
+    .map((item) => {
+      const snippet = item["snippet"] as Record<string, unknown> | undefined;
+      const vid = (item["id"] as Record<string, unknown> | undefined)?.["videoId"] as string | undefined;
+      const name = (snippet?.["title"] as string | undefined) || "";
+      const channel = (snippet?.["channelTitle"] as string | undefined) || "";
+      const description = (snippet?.["description"] as string | undefined) || "";
+      if (!vid) return null;
+      return { id: vid, title: name, artist: channel, description };
+    })
+    .filter((c): c is { id: string; title: string; artist: string; description: string } => !!c);
 
-  return null;
+  return findBestMatch(title, artist, candidates);
 };
 
 export const addTracksToYtmPlaylist = async (
