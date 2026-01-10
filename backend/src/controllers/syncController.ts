@@ -11,6 +11,7 @@ import {
   searchSpotifyTrackExact,
   SpotifyScopeLevel,
   SpotifyTokenExpiredError,
+  refreshAccessToken as refreshSpotifyAccessToken,
 } from "../utils/spotify";
 import {
   YtmScopeLevel,
@@ -19,11 +20,15 @@ import {
   fetchYtmPlaylistWithTracks,
   removeTracksFromYtmPlaylist,
   searchYtmTrackExact,
+  refreshAccessToken as refreshYtmAccessToken,
 } from "../utils/ytm";
+import { normalizeArtist, normalizeTitle, trackIdentity } from "../utils/trackNormalization";
 
-interface TrackKey {
+interface NormalizedTrack {
   title: string;
   artist: string;
+  normalizedTitle: string;
+  normalizedArtist: string;
 }
 
 type Direction = "SPOTIFY_TO_YTM" | "YTM_TO_SPOTIFY";
@@ -32,11 +37,9 @@ type CaseLabel = "EQUAL" | "SUBSET" | "SUPERSET" | "PARTIAL";
 
 type Mode = "APPEND_ONLY" | "FULL_SYNC";
 
-const norm = (value: string) => value.trim().toLowerCase();
+const toPublicTrack = (track: NormalizedTrack) => ({ title: track.title, artist: track.artist });
 
-const toKey = (t: TrackKey) => `${norm(t.title)}::${norm(t.artist)}`;
-
-const computeCase = (toAdd: TrackKey[], toRemove: TrackKey[]): CaseLabel => {
+const computeCase = (toAdd: NormalizedTrack[], toRemove: NormalizedTrack[]): CaseLabel => {
   if (toAdd.length === 0 && toRemove.length === 0) return "EQUAL";
   if (toAdd.length > 0 && toRemove.length === 0) return "SUBSET";
   if (toAdd.length === 0 && toRemove.length > 0) return "SUPERSET";
@@ -63,6 +66,62 @@ const findPlaylistIdsByName = async (userId: string, playlistName: string) => {
   return { spotifyId: spotify?.spotifyPlaylistId || null, ytmId: ytm?.ytmPlaylistId || null };
 };
 
+const ensureSpotifyAccessToken = async (userId: string) => {
+  const account = await SpotifyAccount.findOne({ userId });
+  if (!account) {
+    const err = new Error("Spotify account not linked");
+    // @ts-expect-error add status for upstream handling
+    err.status = 401;
+    throw err;
+  }
+
+  const expiresSoon = account.expiresAt.getTime() <= Date.now() + 60_000;
+  if (!expiresSoon) return account.accessToken;
+
+  try {
+    const refreshed = await refreshSpotifyAccessToken(account.refreshToken);
+    account.accessToken = refreshed.accessToken;
+    account.refreshToken = refreshed.refreshToken || account.refreshToken;
+    account.expiresAt = new Date(Date.now() + refreshed.expiresIn * 1000);
+    await account.save();
+    return account.accessToken;
+  } catch (error) {
+    console.error("[sync][spotify] token refresh failed", error);
+    const err = new Error("Please reconnect Spotify");
+    // @ts-expect-error add status for upstream handling
+    err.status = 401;
+    throw err;
+  }
+};
+
+const ensureYtmAccessToken = async (userId: string) => {
+  const account = await YtmAccount.findOne({ userId });
+  if (!account) {
+    const err = new Error("YouTube Music account not linked");
+    // @ts-expect-error add status for upstream handling
+    err.status = 401;
+    throw err;
+  }
+
+  const expiresSoon = account.expiresAt.getTime() <= Date.now() + 60_000;
+  if (!expiresSoon) return account.accessToken;
+
+  try {
+    const refreshed = await refreshYtmAccessToken(account.refreshToken);
+    account.accessToken = refreshed.accessToken;
+    account.refreshToken = refreshed.refreshToken || account.refreshToken;
+    account.expiresAt = new Date(Date.now() + refreshed.expiresIn * 1000);
+    await account.save();
+    return account.accessToken;
+  } catch (error) {
+    console.error("[sync][ytm] token refresh failed", error);
+    const err = new Error("Please reconnect YouTube Music");
+    // @ts-expect-error add status for upstream handling
+    err.status = 401;
+    throw err;
+  }
+};
+
 const getTrackSets = async (
   direction: Direction,
   spotifyAccessToken: string,
@@ -75,23 +134,33 @@ const getTrackSets = async (
     fetchYtmPlaylistWithTracks(ytmAccessToken, ytmPlaylistId),
   ]);
 
-  const spotifyTracks: TrackKey[] = spotifyPlaylist.tracks
-    .map((t) => ({ title: t.title, artist: t.artists[0] || "" }))
-    .filter((t) => t.title.trim() && t.artist.trim());
+  const spotifyTracks: NormalizedTrack[] = spotifyPlaylist.tracks
+    .map((t) => ({
+      title: t.title,
+      artist: t.artists[0] || "",
+      normalizedTitle: normalizeTitle(t.title),
+      normalizedArtist: normalizeArtist(t.artists[0] || ""),
+    }))
+    .filter((t) => t.normalizedTitle && t.normalizedArtist);
 
-  const ytmTracks: TrackKey[] = ytmPlaylist.tracks
-    .map((t) => ({ title: t.title, artist: t.artist || "" }))
-    .filter((t) => t.title.trim() && t.artist && t.artist.trim());
+  const ytmTracks: NormalizedTrack[] = ytmPlaylist.tracks
+    .map((t) => ({
+      title: t.title,
+      artist: t.artist || "",
+      normalizedTitle: normalizeTitle(t.title),
+      normalizedArtist: normalizeArtist(t.artist || ""),
+    }))
+    .filter((t) => t.normalizedTitle && t.normalizedArtist);
 
   const source = direction === "SPOTIFY_TO_YTM" ? spotifyTracks : ytmTracks;
   const dest = direction === "SPOTIFY_TO_YTM" ? ytmTracks : spotifyTracks;
 
-  const destSet = new Set(dest.map(toKey));
-  const sourceSet = new Set(source.map(toKey));
+  const destSet = new Set(dest.map((t) => trackIdentity(t.title, t.artist)));
+  const sourceSet = new Set(source.map((t) => trackIdentity(t.title, t.artist)));
 
-  const common = source.filter((t) => destSet.has(toKey(t)));
-  const toAdd = source.filter((t) => !destSet.has(toKey(t)));
-  const toRemove = dest.filter((t) => !sourceSet.has(toKey(t)));
+  const common = source.filter((t) => destSet.has(trackIdentity(t.title, t.artist)));
+  const toAdd = source.filter((t) => !destSet.has(trackIdentity(t.title, t.artist)));
+  const toRemove = dest.filter((t) => !sourceSet.has(trackIdentity(t.title, t.artist)));
 
   return { common, toAdd, toRemove, spotifyPlaylist, ytmPlaylist };
 };
@@ -105,6 +174,8 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
     if (!playlistName || !direction) return res.status(400).json({ error: "playlistName and direction are required" });
 
     const { spotify, ytm } = await ensureLinked(userId);
+    const spotifyAccessToken = await ensureSpotifyAccessToken(userId);
+    const ytmAccessToken = await ensureYtmAccessToken(userId);
     const { spotifyId, ytmId } = await findPlaylistIdsByName(userId, playlistName);
 
     if (!spotifyId || !ytmId) {
@@ -113,15 +184,47 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
 
     const { common, toAdd, toRemove } = await getTrackSets(
       direction,
-      spotify.accessToken,
-      ytm.accessToken,
+      spotifyAccessToken,
+      ytmAccessToken,
       spotifyId,
       ytmId
     );
 
-    const caseLabel = computeCase(toAdd, toRemove);
+    const resolvedAdds: NormalizedTrack[] = [];
+    const skippedTracks: Array<{ title: string; artist: string; reason: string; normalizedTitle: string }> = [];
 
-    return res.json({ case: caseLabel, common, toAdd, toRemove });
+    for (const track of toAdd) {
+      const matchId =
+        direction === "SPOTIFY_TO_YTM"
+          ? await searchYtmTrackExact(ytmAccessToken, track.title, track.artist)
+          : await searchSpotifyTrackExact(spotifyAccessToken, track.title, track.artist);
+
+      if (matchId) {
+        resolvedAdds.push(track);
+      } else {
+        skippedTracks.push({
+          title: track.title,
+          artist: track.artist,
+          normalizedTitle: track.normalizedTitle,
+          reason: "NO_EXACT_MATCH",
+        });
+        console.warn("[sync][preview] skip no exact match", {
+          title: track.title,
+          normalizedTitle: track.normalizedTitle,
+          artist: track.artist,
+        });
+      }
+    }
+
+    const caseLabel = computeCase(resolvedAdds, toRemove);
+
+    return res.json({
+      case: caseLabel,
+      common: common.map(toPublicTrack),
+      toAdd: resolvedAdds.map(toPublicTrack),
+      toRemove: toRemove.map(toPublicTrack),
+      skippedTracks,
+    });
   } catch (error) {
     if ((error as any)?.status === 401) {
       return res.status(401).json({ error: (error as Error).message });
@@ -148,6 +251,8 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
     }
 
     const { spotify, ytm } = await ensureLinked(userId);
+    const spotifyAccessToken = await ensureSpotifyAccessToken(userId);
+    const ytmAccessToken = await ensureYtmAccessToken(userId);
 
     // Guard scope
     const hasWrite = direction === "SPOTIFY_TO_YTM" ? ytm.scopeLevel === "WRITE" : spotify.scopeLevel === "WRITE";
@@ -162,29 +267,39 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
 
     const { toAdd, toRemove, spotifyPlaylist, ytmPlaylist } = await getTrackSets(
       direction,
-      spotify.accessToken,
-      ytm.accessToken,
+      spotifyAccessToken,
+      ytmAccessToken,
       spotifyId,
       ytmId
     );
 
     // Resolve adds
-    const skippedTracks: Array<{ title: string; artist: string; reason: string }> = [];
+    const skippedTracks: Array<{ title: string; artist: string; reason: string; normalizedTitle?: string }> = [];
     const addedUris: string[] = [];
     const addedVideoIds: string[] = [];
 
     for (const track of toAdd) {
       if (direction === "SPOTIFY_TO_YTM") {
-        const videoId = await searchYtmTrackExact(ytm.accessToken, track.title, track.artist);
+        const videoId = await searchYtmTrackExact(ytmAccessToken, track.title, track.artist);
         if (!videoId) {
-          skippedTracks.push({ ...track, reason: "NO_EXACT_MATCH" });
+          skippedTracks.push({ ...toPublicTrack(track), normalizedTitle: track.normalizedTitle, reason: "NO_EXACT_MATCH" });
+          console.warn("[sync][execute] skip no exact match", {
+            title: track.title,
+            normalizedTitle: track.normalizedTitle,
+            artist: track.artist,
+          });
           continue;
         }
         addedVideoIds.push(videoId);
       } else {
-        const uri = await searchSpotifyTrackExact(spotify.accessToken, track.title, track.artist);
+        const uri = await searchSpotifyTrackExact(spotifyAccessToken, track.title, track.artist);
         if (!uri) {
-          skippedTracks.push({ ...track, reason: "NO_EXACT_MATCH" });
+          skippedTracks.push({ ...toPublicTrack(track), normalizedTitle: track.normalizedTitle, reason: "NO_EXACT_MATCH" });
+          console.warn("[sync][execute] skip no exact match", {
+            title: track.title,
+            normalizedTitle: track.normalizedTitle,
+            artist: track.artist,
+          });
           continue;
         }
         addedUris.push(uri);
@@ -195,10 +310,10 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
     const toRemoveUris: string[] = [];
     const toRemovePlaylistItemIds: string[] = [];
     if (mode === "FULL_SYNC") {
-      const removeSet = new Set(toRemove.map(toKey));
+      const removeSet = new Set(toRemove.map((t) => trackIdentity(t.title, t.artist)));
       if (direction === "SPOTIFY_TO_YTM") {
         for (const t of ytmPlaylist.tracks) {
-          const key = toKey({ title: t.title, artist: t.artist || "" });
+          const key = trackIdentity(t.title, t.artist || "");
           if (!removeSet.has(key)) continue;
           if (t.playlistItemId) {
             toRemovePlaylistItemIds.push(t.playlistItemId);
@@ -206,7 +321,7 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
         }
       } else {
         for (const t of spotifyPlaylist.tracks) {
-          const key = toKey({ title: t.title, artist: t.artists[0] || "" });
+          const key = trackIdentity(t.title, t.artists[0] || "");
           if (!removeSet.has(key)) continue;
           if (t.uri) {
             toRemoveUris.push(t.uri);
@@ -216,14 +331,14 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
     }
 
     if (direction === "SPOTIFY_TO_YTM") {
-      await addTracksToYtmPlaylist(ytm.accessToken, ytmId, addedVideoIds);
+      await addTracksToYtmPlaylist(ytmAccessToken, ytmId, addedVideoIds);
       if (mode === "FULL_SYNC") {
-        await removeTracksFromYtmPlaylist(ytm.accessToken, toRemovePlaylistItemIds);
+        await removeTracksFromYtmPlaylist(ytmAccessToken, toRemovePlaylistItemIds);
       }
     } else {
-      await addTracksToSpotifyPlaylist(spotify.accessToken, spotifyId, addedUris);
+      await addTracksToSpotifyPlaylist(spotifyAccessToken, spotifyId, addedUris);
       if (mode === "FULL_SYNC") {
-        await removeTracksFromSpotifyPlaylist(spotify.accessToken, spotifyId, toRemoveUris);
+        await removeTracksFromSpotifyPlaylist(spotifyAccessToken, spotifyId, toRemoveUris);
       }
     }
 

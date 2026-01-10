@@ -1,4 +1,5 @@
 import env from "../config/env";
+import { normalizeArtist, normalizeTitle, trackIdentity } from "./trackNormalization";
 
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const API_BASE_URL = "https://api.spotify.com/v1";
@@ -128,20 +129,25 @@ export const searchSpotifyTrackExact = async (
   title: string,
   artist: string
 ): Promise<string | null> => {
-  const query = encodeURIComponent(`${title} artist:${artist}`);
+  const normalizedTitle = normalizeTitle(title);
+  const normalizedArtist = normalizeArtist(artist);
+  const query = encodeURIComponent(`${normalizedTitle} artist:${artist}`);
   const url = `${SEARCH_BASE_URL}?q=${query}&type=track&limit=5`;
 
   const data = await fetchSpotifyJson(url, accessToken);
   const tracks = ((data["tracks"] as Record<string, unknown> | undefined)?.["items"] as Array<Record<string, unknown>> | undefined) || [];
-  const titleLc = title.trim().toLowerCase();
-  const artistLc = artist.trim().toLowerCase();
 
   for (const t of tracks) {
     const name = (t["name"] as string | undefined)?.trim().toLowerCase();
     const artistsArr = (t["artists"] as Array<Record<string, unknown>> | undefined) || [];
     const primary = (artistsArr[0]?.["name"] as string | undefined)?.trim().toLowerCase();
     const uri = t["uri"] as string | undefined;
-    if (name && primary && uri && name === titleLc && primary === artistLc) {
+    if (
+      name &&
+      primary &&
+      uri &&
+      trackIdentity(name, primary) === `${normalizedTitle}::${normalizedArtist}`
+    ) {
       return uri;
     }
   }

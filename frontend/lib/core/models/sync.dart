@@ -65,12 +65,14 @@ class SyncPreviewResult {
     required this.common,
     required this.toAdd,
     required this.toRemove,
+    required this.skipped,
   });
 
   final SyncCaseLabel caseLabel;
   final List<SyncTrack> common;
   final List<SyncTrack> toAdd;
   final List<SyncTrack> toRemove;
+  final List<SyncSkippedTrack> skipped;
 
   factory SyncPreviewResult.fromJson(Map<String, dynamic> json) {
     List<SyncTrack> parseList(String key) {
@@ -79,11 +81,15 @@ class SyncPreviewResult {
       return raw.map(SyncTrack.fromJson).toList();
     }
 
+    final skippedRaw = (json['skippedTracks'] as List<dynamic>? ?? <dynamic>[])
+        .cast<Map<String, dynamic>>();
+
     return SyncPreviewResult(
       caseLabel: SyncCaseLabel.fromApi(json['case'] as String? ?? ''),
       common: parseList('common'),
       toAdd: parseList('toAdd'),
       toRemove: parseList('toRemove'),
+      skipped: skippedRaw.map(SyncSkippedTrack.fromJson).toList(),
     );
   }
 }

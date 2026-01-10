@@ -1027,6 +1027,7 @@ class _SyncCard extends StatelessWidget {
               OutlinedButton.icon(
                 onPressed:
                     selectedName == null ||
+                        syncState.preview == null ||
                         syncState.isExecuting ||
                         syncState.isPreviewing
                     ? null
@@ -1079,6 +1080,39 @@ class _SyncCard extends StatelessWidget {
   }
 
   Future<void> _handleExecute(BuildContext context) async {
+    if (syncState.preview == null) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Preview first to confirm changes.')),
+      );
+      return;
+    }
+
+    final preview = syncState.preview!;
+    final proceed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Ready to sync?'),
+          content: Text(
+            'This will add ${preview.toAdd.length}, remove ${preview.toRemove.length} (only in full sync), and skip ${preview.skipped.length} tracks. Continue?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: const Text('Continue'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (proceed != true) return;
+
     try {
       final outcome = await syncController.executeSync();
       if (!context.mounted) return;
@@ -1173,7 +1207,7 @@ class _PreviewPanel extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Text(
-                '${preview.toAdd.length} to add · ${preview.toRemove.length} to remove (full sync only)',
+                '${preview.toAdd.length} to add · ${preview.toRemove.length} to remove (full sync only) · ${preview.skipped.length} to skip',
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             ],
@@ -1187,6 +1221,11 @@ class _PreviewPanel extends StatelessWidget {
                   ? 'Will remove'
                   : 'Removals (only in full sync)',
               tracks: preview.toRemove,
+            ),
+          if (preview.skipped.isNotEmpty)
+            _TrackList(
+              title: 'Will skip (no exact match)',
+              tracks: preview.skipped,
             ),
           if (preview.toAdd.isEmpty && preview.toRemove.isEmpty)
             const Text('Playlists already match.'),

@@ -174,6 +174,16 @@ class SyncController extends StateNotifier<SyncState> {
       throw Exception('Select a playlist before running sync.');
     }
 
+    if (state.preview == null) {
+      state = state.copyWith(
+        message: 'Preview sync to see changes before executing.',
+        clearResult: true,
+      );
+      return const SyncRunOutcome(
+        errorMessage: 'Preview sync to see changes before executing.',
+      );
+    }
+
     state = state.copyWith(
       isExecuting: true,
       clearMessage: true,

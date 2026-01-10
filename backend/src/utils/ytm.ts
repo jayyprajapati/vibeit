@@ -1,4 +1,5 @@
 import env from "../config/env";
+import { normalizeArtist, normalizeTitle, trackIdentity } from "./trackNormalization";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -231,9 +232,11 @@ export const searchYtmTrackExact = async (
   title: string,
   artist: string
 ): Promise<string | null> => {
+  const normalizedTitle = normalizeTitle(title);
+  const normalizedArtist = normalizeArtist(artist);
   const params = new URLSearchParams({
     part: "snippet",
-    q: `${title} ${artist}`,
+    q: `${normalizedTitle} ${artist}`,
     type: "video",
     maxResults: "5",
   });
@@ -248,15 +251,18 @@ export const searchYtmTrackExact = async (
 
   const data = (await resp.json()) as Record<string, unknown>;
   const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
-  const titleLc = title.trim().toLowerCase();
-  const artistLc = artist.trim().toLowerCase();
 
   for (const item of items) {
     const snippet = item["snippet"] as Record<string, unknown> | undefined;
     const vid = (item["id"] as Record<string, unknown> | undefined)?.["videoId"] as string | undefined;
     const name = (snippet?.["title"] as string | undefined)?.trim().toLowerCase();
     const channel = (snippet?.["channelTitle"] as string | undefined)?.trim().toLowerCase();
-    if (vid && name && channel && name === titleLc && channel === artistLc) {
+    if (
+      vid &&
+      name &&
+      channel &&
+      trackIdentity(name, channel) === `${normalizedTitle}::${normalizedArtist}`
+    ) {
       return vid;
     }
   }
