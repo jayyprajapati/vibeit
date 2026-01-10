@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import 'models/playlist.dart';
 import 'models/spotify.dart';
+import 'models/ytm.dart';
 import 'models/user_profile.dart';
 
 class ApiClient {
@@ -133,6 +134,27 @@ class ApiClient {
     final resp = await _client.post(uri, headers: _headers(token: token));
     final data = _decode(resp);
     return SpotifyPlaylistsPayload.fromJson(data);
+  }
+
+  Future<YtmAuthUrl> getYtmAuthUrl(String token) async {
+    final uri = Uri.parse('$baseUrl/ytm/auth-url');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return YtmAuthUrl(data['url'] as String);
+  }
+
+  Future<YtmPlaylistsPayload> getYtmPlaylists(String token) async {
+    final uri = Uri.parse('$baseUrl/ytm/playlists');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return YtmPlaylistsPayload.fromJson(data);
+  }
+
+  Future<YtmPlaylistsPayload> syncYtmPlaylists(String token) async {
+    final uri = Uri.parse('$baseUrl/ytm/sync-now');
+    final resp = await _client.post(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return YtmPlaylistsPayload.fromJson(data);
   }
 
   Future<SpotifyImportSummary> importSpotifyPlaylist(

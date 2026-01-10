@@ -1,6 +1,6 @@
 # Vibeit Backend
 
-Express + TypeScript API that powers OTP auth and the internal playlists. No external music providers are used.
+Express + TypeScript API that powers OTP auth, internal playlists, and read-only integrations with Spotify and YouTube Music.
 
 ## Prerequisites
 - Node.js 20+
@@ -27,6 +27,10 @@ Dev server runs on `PORT` (default 3000) and hot-reloads via ts-node-dev.
 - `SPOTIFY_CLIENT_SECRET` — Spotify app client secret
 - `SPOTIFY_REDIRECT_URI` — backend callback registered in Spotify (e.g. https://<ngrok-id>.ngrok-free.app/spotify/callback)
 - `SPOTIFY_FRONTEND_REDIRECT` — where to send the user after a successful/failed Spotify auth (e.g. http://localhost:5173/platforms)
+- `GOOGLE_CLIENT_ID` — Google OAuth client id (YouTube Music)
+- `GOOGLE_CLIENT_SECRET` — Google OAuth client secret (YouTube Music)
+- `YTM_REDIRECT_URI` — backend callback registered in Google Cloud Console (e.g. https://<ngrok-id>.ngrok-free.app/ytm/callback)
+- `YTM_FRONTEND_REDIRECT` — where to send the user after a successful/failed YTM auth (e.g. http://localhost:5173/platforms)
 
 Note: Spotify does not accept plain `http://` redirect URIs for production or some dev accounts; use a secure `https://` URL. For local development you can expose your local backend via ngrok and use the generated `https://<ngrok-id>.ngrok-free.app` domain as `SPOTIFY_REDIRECT_URI` and Spotify App Redirect URL.
 
@@ -87,6 +91,20 @@ All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <toke
 - `POST /spotify/sync-now`
    - headers: auth required
    - forces an immediate refresh from Spotify and updates cache + timestamps
+
+### YouTube Music (read-only)
+- `GET /ytm/auth-url`
+   - headers: auth required
+   - returns: `{ "url": "https://accounts.google.com/..." }` (open in browser)
+- `GET /ytm/callback`
+   - handles Google redirect, stores tokens, then redirects to `YTM_FRONTEND_REDIRECT`
+- `GET /ytm/playlists`
+   - headers: auth required
+   - increments daily usage; returns cached playlists if fetched within the last 24h, otherwise refreshes from YouTube Music and updates the cache
+- `POST /ytm/sync-now`
+   - headers: auth required
+   - increments daily usage; forces an immediate refresh from YouTube Music and updates cache + timestamps
+   - returns `429` with `{ "error": "Daily usage limit exceeded for YouTube Music" }` if the user's `usageToday` meets `dailyUsageLimit`
 
 ## Failure Tips
 - 401/403: ensure you pass `Authorization: Bearer <token>` from `/auth/verify-otp`.

@@ -11,6 +11,10 @@ const spotifyClientId = process.env.SPOTIFY_CLIENT_ID || "";
 const spotifyClientSecret = process.env.SPOTIFY_CLIENT_SECRET || "";
 const spotifyRedirectUri = process.env.SPOTIFY_REDIRECT_URI || "";
 const spotifyFrontendRedirect = process.env.SPOTIFY_FRONTEND_REDIRECT || "http://localhost:5173/platforms";
+const googleClientId = process.env.GOOGLE_CLIENT_ID || "";
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
+const ytmRedirectUri = process.env.YTM_REDIRECT_URI || "";
+const ytmFrontendRedirect = process.env.YTM_FRONTEND_REDIRECT || "http://localhost:5173/platforms";
 
 export const env = {
   port,
@@ -21,6 +25,10 @@ export const env = {
   spotifyClientSecret,
   spotifyRedirectUri,
   spotifyFrontendRedirect,
+  googleClientId,
+  googleClientSecret,
+  ytmRedirectUri,
+  ytmFrontendRedirect,
 };
 
 export default env;
