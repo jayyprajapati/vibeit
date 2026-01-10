@@ -5,8 +5,9 @@ import playlistRoutes from "./routes/playlistRoutes";
 import searchRoutes from "./routes/searchRoutes";
 import spotifyRoutes from "./routes/spotifyRoutes";
 import ytmRoutes from "./routes/ytmRoutes";
+import syncRoutes from "./routes/syncRoutes";
 import { authMiddleware } from "./middleware/authMiddleware";
-import { getMe } from "./controllers/authController";
+import { getMe, getPlatformAccess } from "./controllers/authController";
 
 const app = express();
 
@@ -19,10 +20,12 @@ app.get("/health", (_: Request, res: Response) => {
 
 app.use("/auth", authRoutes);
 app.get("/me", authMiddleware, getMe);
+app.get("/me/platform-access", authMiddleware, getPlatformAccess);
 app.use("/playlists", playlistRoutes);
 app.use("/search", searchRoutes);
 app.use("/spotify", spotifyRoutes);
 app.use("/ytm", ytmRoutes);
+app.use("/sync", syncRoutes);
 
 // Catch-all for unknown routes so errors flow through the central handler.
 app.use((_: Request, res: Response, next: NextFunction) => {

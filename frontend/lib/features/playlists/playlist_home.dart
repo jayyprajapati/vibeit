@@ -18,6 +18,8 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     final controller = ref.read(playlistControllerProvider.notifier);
     final nameController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+    final navigator = Navigator.of(context);
+    final scaffold = ScaffoldMessenger.of(context);
 
     final created = await showDialog<bool>(
       context: context,
@@ -57,22 +59,21 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
                   final playlist = await controller.createPlaylist(
                     nameController.text.trim(),
                   );
-                  if (mounted) {
-                    Navigator.pop(context, true);
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => PlaylistDetailScreen(
-                          playlistId: playlist.id,
-                          initialName: playlist.name,
-                        ),
+                  if (!mounted) return;
+                  navigator.pop(true);
+                  navigator.push(
+                    MaterialPageRoute(
+                      builder: (_) => PlaylistDetailScreen(
+                        playlistId: playlist.id,
+                        initialName: playlist.name,
                       ),
-                    );
-                  }
+                    ),
+                  );
                 } catch (e) {
                   if (mounted) {
-                    ScaffoldMessenger.of(
-                      context,
-                    ).showSnackBar(SnackBar(content: Text(e.toString())));
+                    scaffold.showSnackBar(
+                      SnackBar(content: Text(e.toString())),
+                    );
                   }
                 } finally {
                   if (mounted) setState(() => _creating = false);

@@ -145,7 +145,7 @@ class SpotifyController extends StateNotifier<AsyncValue<SpotifyState>> {
     }
   }
 
-  Future<void> startConnectFlow() async {
+  Future<void> startConnectFlow({bool requestWrite = false}) async {
     final token = _requireToken();
     final current = state.valueOrNull ?? SpotifyState.initial();
     state = AsyncValue.data(
@@ -153,7 +153,7 @@ class SpotifyController extends StateNotifier<AsyncValue<SpotifyState>> {
     );
 
     try {
-      final authUrl = await _repo.getAuthUrl(token);
+      final authUrl = await _repo.getAuthUrl(token, requestWrite: requestWrite);
       final launched = await launchUrl(
         Uri.parse(authUrl.url),
         mode: LaunchMode.externalApplication,

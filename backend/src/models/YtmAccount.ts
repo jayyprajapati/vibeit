@@ -5,6 +5,7 @@ export interface IYtmAccount extends Document {
   accessToken: string;
   refreshToken: string;
   expiresAt: Date;
+  scopeLevel: "READ" | "WRITE";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -15,6 +16,7 @@ const ytmAccountSchema = new Schema<IYtmAccount>(
     accessToken: { type: String, required: true },
     refreshToken: { type: String, required: true },
     expiresAt: { type: Date, required: true },
+    scopeLevel: { type: String, enum: ["READ", "WRITE"], default: "READ" },
   },
   {
     timestamps: true,

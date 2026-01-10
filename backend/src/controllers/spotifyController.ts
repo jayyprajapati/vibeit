@@ -7,6 +7,7 @@ import SpotifyPlaylist, { ISpotifyPlaylist } from "../models/SpotifyPlaylist";
 import Playlist from "../models/Playlist";
 import {
   SpotifyRemotePlaylist,
+  SpotifyScopeLevel,
   buildSpotifyAuthUrl,
   exchangeCodeForToken,
   fetchSpotifyPlaylists,
@@ -21,6 +22,7 @@ const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiry
 interface SpotifyStatePayload {
   userId: string;
   redirectTo?: string;
+  scopeLevel?: SpotifyScopeLevel;
 }
 
 interface PlaylistResponse {
@@ -207,8 +209,9 @@ export const getSpotifyAuthUrl = async (req: Request, res: Response, next: NextF
       return res.status(500).json({ error: "Spotify configuration is missing" });
     }
 
-    const state = encodeState({ userId, redirectTo: env.spotifyFrontendRedirect });
-    const url = buildSpotifyAuthUrl(state);
+    const requestedScope = (req.query.scope as string | undefined)?.toUpperCase() === "WRITE" ? "WRITE" : "READ";
+    const state = encodeState({ userId, redirectTo: env.spotifyFrontendRedirect, scopeLevel: requestedScope });
+    const url = buildSpotifyAuthUrl(state, requestedScope);
     return res.json({ url });
   } catch (error) {
     return next(error);
@@ -244,6 +247,7 @@ export const spotifyCallback = async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
     const existing = await SpotifyAccount.findOne({ userId: payload.userId });
     const refreshToken = tokens.refreshToken || existing?.refreshToken;
+    const scopeLevel: SpotifyScopeLevel = payload.scopeLevel === "WRITE" ? "WRITE" : existing?.scopeLevel || "READ";
 
     if (!refreshToken) {
       throw new Error("Spotify did not return a refresh token. Please reconnect.");
@@ -256,6 +260,7 @@ export const spotifyCallback = async (req: Request, res: Response) => {
         accessToken: tokens.accessToken,
         refreshToken,
         expiresAt,
+        scopeLevel,
       },
       { upsert: true, new: true }
     );

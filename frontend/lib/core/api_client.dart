@@ -2,9 +2,21 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 import 'models/playlist.dart';
+import 'models/platform_access.dart';
 import 'models/spotify.dart';
+import 'models/sync.dart';
 import 'models/ytm.dart';
 import 'models/user_profile.dart';
+
+class ApiException implements Exception {
+  const ApiException(this.statusCode, this.message);
+
+  final int statusCode;
+  final String message;
+
+  @override
+  String toString() => message;
+}
 
 class ApiClient {
   ApiClient({required this.baseUrl, http.Client? client})
@@ -48,6 +60,13 @@ class ApiClient {
 
     final data = _decode(resp);
     return UserProfile.fromJson(data['user'] as Map<String, dynamic>);
+  }
+
+  Future<PlatformAccess> getPlatformAccess(String token) async {
+    final uri = Uri.parse('$baseUrl/me/platform-access');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return PlatformAccess.fromJson(data);
   }
 
   Future<List<Playlist>> getPlaylists(String token) async {
@@ -115,8 +134,13 @@ class ApiClient {
     return list.map(TrackItem.fromJson).toList();
   }
 
-  Future<SpotifyAuthUrl> getSpotifyAuthUrl(String token) async {
-    final uri = Uri.parse('$baseUrl/spotify/auth-url');
+  Future<SpotifyAuthUrl> getSpotifyAuthUrl(
+    String token, {
+    bool requestWrite = false,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/spotify/auth-url${requestWrite ? '?scope=write' : ''}',
+    );
     final resp = await _client.get(uri, headers: _headers(token: token));
     final data = _decode(resp);
     return SpotifyAuthUrl(data['url'] as String);
@@ -136,8 +160,13 @@ class ApiClient {
     return SpotifyPlaylistsPayload.fromJson(data);
   }
 
-  Future<YtmAuthUrl> getYtmAuthUrl(String token) async {
-    final uri = Uri.parse('$baseUrl/ytm/auth-url');
+  Future<YtmAuthUrl> getYtmAuthUrl(
+    String token, {
+    bool requestWrite = false,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/ytm/auth-url${requestWrite ? '?scope=write' : ''}',
+    );
     final resp = await _client.get(uri, headers: _headers(token: token));
     final data = _decode(resp);
     return YtmAuthUrl(data['url'] as String);
@@ -167,6 +196,46 @@ class ApiClient {
     return SpotifyImportSummary.fromJson(data);
   }
 
+  Future<SyncPreviewResult> previewSync({
+    required String token,
+    required SyncDirection direction,
+    required String playlistName,
+  }) async {
+    final uri = Uri.parse('$baseUrl/sync/preview');
+    final resp = await _client.post(
+      uri,
+      headers: _headers(token: token),
+      body: jsonEncode({
+        'playlistName': playlistName,
+        'direction': direction.apiValue,
+      }),
+    );
+
+    final data = _decode(resp);
+    return SyncPreviewResult.fromJson(data);
+  }
+
+  Future<SyncExecuteResult> executeSync({
+    required String token,
+    required SyncDirection direction,
+    required SyncMode mode,
+    required String playlistName,
+  }) async {
+    final uri = Uri.parse('$baseUrl/sync/execute');
+    final resp = await _client.post(
+      uri,
+      headers: _headers(token: token),
+      body: jsonEncode({
+        'playlistName': playlistName,
+        'direction': direction.apiValue,
+        'mode': mode.apiValue,
+      }),
+    );
+
+    final data = _decode(resp);
+    return SyncExecuteResult.fromJson(data);
+  }
+
   Map<String, String> _headers({String? token}) {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null) {
@@ -188,9 +257,12 @@ class ApiClient {
     try {
       final body = jsonDecode(resp.body) as Map<String, dynamic>;
       final message = body['error']?.toString() ?? 'Request failed';
-      throw Exception(message);
+      throw ApiException(resp.statusCode, message);
     } catch (_) {
-      throw Exception('Request failed (${resp.statusCode})');
+      throw ApiException(
+        resp.statusCode,
+        'Request failed (${resp.statusCode})',
+      );
     }
   }
 }

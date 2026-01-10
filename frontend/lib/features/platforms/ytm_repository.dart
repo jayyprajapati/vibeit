@@ -6,8 +6,8 @@ class YtmRepository {
 
   final ApiClient apiClient;
 
-  Future<YtmAuthUrl> getAuthUrl(String token) {
-    return apiClient.getYtmAuthUrl(token);
+  Future<YtmAuthUrl> getAuthUrl(String token, {bool requestWrite = false}) {
+    return apiClient.getYtmAuthUrl(token, requestWrite: requestWrite);
   }
 
   Future<YtmPlaylistsPayload> getPlaylists(String token) {

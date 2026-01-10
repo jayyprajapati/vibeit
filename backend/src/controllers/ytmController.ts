@@ -7,6 +7,7 @@ import { YtmPlaylist, IYtmPlaylist } from "../models/YtmPlaylist";
 import User from "../models/User";
 import {
   YtmRemotePlaylist,
+  YtmScopeLevel,
   YtmTokenExpiredError,
   buildYtmAuthUrl,
   exchangeCodeForToken,
@@ -20,6 +21,7 @@ const TOKEN_EXPIRY_BUFFER_MS = 60 * 1000; // refresh 1 minute before expiry
 interface YtmStatePayload {
   userId: string;
   redirectTo?: string;
+  scopeLevel?: YtmScopeLevel;
 }
 
 interface PlaylistResponse {
@@ -233,8 +235,9 @@ export const getYtmAuthUrl = async (req: Request, res: Response, next: NextFunct
       return res.status(500).json({ error: "YouTube Music configuration is missing" });
     }
 
-    const state = encodeState({ userId, redirectTo: env.ytmFrontendRedirect });
-    const url = buildYtmAuthUrl(state);
+    const requestedScope = (req.query.scope as string | undefined)?.toUpperCase() === "WRITE" ? "WRITE" : "READ";
+    const state = encodeState({ userId, redirectTo: env.ytmFrontendRedirect, scopeLevel: requestedScope });
+    const url = buildYtmAuthUrl(state, requestedScope);
     return res.json({ url });
   } catch (error) {
     return next(error);
@@ -270,6 +273,7 @@ export const ytmCallback = async (req: Request, res: Response) => {
     const expiresAt = new Date(Date.now() + tokens.expiresIn * 1000);
     const existing = await YtmAccount.findOne({ userId: payload.userId });
     const refreshToken = tokens.refreshToken || existing?.refreshToken;
+    const scopeLevel: YtmScopeLevel = payload.scopeLevel === "WRITE" ? "WRITE" : existing?.scopeLevel || "READ";
 
     if (!refreshToken) {
       throw new Error("Google did not return a refresh token. Please reconnect.");
@@ -282,6 +286,7 @@ export const ytmCallback = async (req: Request, res: Response) => {
         accessToken: tokens.accessToken,
         refreshToken,
         expiresAt,
+        scopeLevel,
       },
       { upsert: true, new: true }
     );

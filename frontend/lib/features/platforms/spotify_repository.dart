@@ -6,8 +6,8 @@ class SpotifyRepository {
 
   final ApiClient apiClient;
 
-  Future<SpotifyAuthUrl> getAuthUrl(String token) {
-    return apiClient.getSpotifyAuthUrl(token);
+  Future<SpotifyAuthUrl> getAuthUrl(String token, {bool requestWrite = false}) {
+    return apiClient.getSpotifyAuthUrl(token, requestWrite: requestWrite);
   }
 
   Future<SpotifyPlaylistsPayload> getPlaylists(String token) {

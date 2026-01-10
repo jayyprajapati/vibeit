@@ -2,7 +2,15 @@ import env from "../config/env";
 
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const API_BASE_URL = "https://api.spotify.com/v1";
-const SPOTIFY_SCOPES = ["playlist-read-private", "playlist-read-collaborative"].join(" ");
+export type SpotifyScopeLevel = "READ" | "WRITE";
+
+const SPOTIFY_SCOPES_READ = ["playlist-read-private", "playlist-read-collaborative"];
+const SPOTIFY_SCOPES_WRITE = [
+  "playlist-read-private",
+  "playlist-read-collaborative",
+  "playlist-modify-private",
+  "playlist-modify-public",
+];
 
 export interface SpotifyTokenResponse {
   accessToken: string;
@@ -21,6 +29,7 @@ export interface SpotifyRemoteTrack {
   artists: string[];
   album: string | null;
   durationMs: number | null;
+  uri?: string;
 }
 
 export class SpotifyTokenExpiredError extends Error {
@@ -38,16 +47,18 @@ const encodeClientCredentials = () => {
   return Buffer.from(`${spotifyClientId}:${spotifyClientSecret}`).toString("base64");
 };
 
-export const buildSpotifyAuthUrl = (state: string): string => {
+export const buildSpotifyAuthUrl = (state: string, level: SpotifyScopeLevel = "READ"): string => {
   if (!env.spotifyRedirectUri) {
     throw new Error("SPOTIFY_REDIRECT_URI is not configured");
   }
+
+  const scopes = level === "WRITE" ? SPOTIFY_SCOPES_WRITE : SPOTIFY_SCOPES_READ;
 
   const params = new URLSearchParams({
     client_id: env.spotifyClientId,
     response_type: "code",
     redirect_uri: env.spotifyRedirectUri,
-    scope: SPOTIFY_SCOPES,
+    scope: scopes.join(" "),
     state,
     show_dialog: "false",
   });
@@ -108,6 +119,86 @@ export const refreshAccessToken = async (refreshToken: string): Promise<SpotifyT
     ...response,
     refreshToken: response.refreshToken || refreshToken,
   };
+};
+
+const SEARCH_BASE_URL = `${API_BASE_URL}/search`;
+
+export const searchSpotifyTrackExact = async (
+  accessToken: string,
+  title: string,
+  artist: string
+): Promise<string | null> => {
+  const query = encodeURIComponent(`${title} artist:${artist}`);
+  const url = `${SEARCH_BASE_URL}?q=${query}&type=track&limit=5`;
+
+  const data = await fetchSpotifyJson(url, accessToken);
+  const tracks = ((data["tracks"] as Record<string, unknown> | undefined)?.["items"] as Array<Record<string, unknown>> | undefined) || [];
+  const titleLc = title.trim().toLowerCase();
+  const artistLc = artist.trim().toLowerCase();
+
+  for (const t of tracks) {
+    const name = (t["name"] as string | undefined)?.trim().toLowerCase();
+    const artistsArr = (t["artists"] as Array<Record<string, unknown>> | undefined) || [];
+    const primary = (artistsArr[0]?.["name"] as string | undefined)?.trim().toLowerCase();
+    const uri = t["uri"] as string | undefined;
+    if (name && primary && uri && name === titleLc && primary === artistLc) {
+      return uri;
+    }
+  }
+
+  return null;
+};
+
+export const addTracksToSpotifyPlaylist = async (
+  accessToken: string,
+  playlistId: string,
+  uris: string[]
+): Promise<void> => {
+  if (uris.length === 0) return;
+  const url = `${API_BASE_URL}/playlists/${playlistId}/tracks`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ uris }),
+  });
+
+  if (resp.status === 401) {
+    throw new SpotifyTokenExpiredError();
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Spotify add tracks failed (${resp.status}): ${text}`);
+  }
+};
+
+export const removeTracksFromSpotifyPlaylist = async (
+  accessToken: string,
+  playlistId: string,
+  uris: string[]
+): Promise<void> => {
+  if (uris.length === 0) return;
+  const url = `${API_BASE_URL}/playlists/${playlistId}/tracks`;
+  const resp = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ tracks: uris.map((uri) => ({ uri })) }),
+  });
+
+  if (resp.status === 401) {
+    throw new SpotifyTokenExpiredError();
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Spotify remove tracks failed (${resp.status}): ${text}`);
+  }
 };
 
 export const fetchSpotifyPlaylists = async (
@@ -193,12 +284,14 @@ export const fetchSpotifyPlaylistWithTracks = async (
         .filter((a): a is string => !!a && a.length > 0);
       const albumName = (track["album"] as Record<string, unknown> | undefined)?.["name"] as string | undefined;
       const durationMs = (track["duration_ms"] as number | undefined) ?? null;
+      const uri = track["uri"] as string | undefined;
 
       tracks.push({
         title: title.trim(),
         artists,
         album: albumName?.trim() ?? null,
         durationMs,
+        uri,
       });
     }
   };

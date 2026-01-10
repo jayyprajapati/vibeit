@@ -1,6 +1,6 @@
 # Vibeit Backend
 
-Express + TypeScript API that powers OTP auth, internal playlists, and read-only integrations with Spotify and YouTube Music.
+Express + TypeScript API that powers OTP auth, internal playlists, and integrations with Spotify and YouTube Music. Playlists can be synced bidirectionally via explicit preview/execute endpoints.
 
 ## Prerequisites
 - Node.js 20+
@@ -79,7 +79,7 @@ All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <toke
    - headers: auth required
    - returns: `{ "tracks": [ { id, title, artist, album, duration } ] }` (results are filtered from a hardcoded list)
 
-### Spotify (read-only)
+### Spotify (read-only + write for sync)
 - `GET /spotify/auth-url`
    - headers: auth required
    - returns: `{ "url": "https://accounts.spotify.com/..." }` (open in browser)
@@ -92,7 +92,12 @@ All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <toke
    - headers: auth required
    - forces an immediate refresh from Spotify and updates cache + timestamps
 
-### YouTube Music (read-only)
+Notes on scopes:
+- Read-only flows use: `playlist-read-private playlist-read-collaborative`
+- Sync execution requires write scopes: `playlist-modify-private playlist-modify-public`
+- Request write by calling `/spotify/auth-url?scope=write`
+
+### YouTube Music (read-only + write for sync)
 - `GET /ytm/auth-url`
    - headers: auth required
    - returns: `{ "url": "https://accounts.google.com/..." }` (open in browser)
@@ -105,6 +110,22 @@ All endpoints are JSON. Authenticated routes expect `Authorization: Bearer <toke
    - headers: auth required
    - increments daily usage; forces an immediate refresh from YouTube Music and updates cache + timestamps
    - returns `429` with `{ "error": "Daily usage limit exceeded for YouTube Music" }` if the user's `usageToday` meets `dailyUsageLimit`
+
+Notes on scopes:
+- Read-only flows use: `https://www.googleapis.com/auth/youtube.readonly`
+- Sync execution requires write scope: `https://www.googleapis.com/auth/youtube.force-ssl`
+- Request write by calling `/ytm/auth-url?scope=write`
+
+### Cross-platform sync
+- `POST /sync/preview`
+   - headers: auth required
+   - body: `{ "playlistName": "My Mix", "direction": "SPOTIFY_TO_YTM" | "YTM_TO_SPOTIFY" }`
+   - returns: `{ case, common, toAdd, toRemove }` using exact title/artist matches; read scope only
+- `POST /sync/execute`
+   - headers: auth required
+   - body: `{ "playlistName", "direction", "mode": "APPEND_ONLY" | "FULL_SYNC" }`
+   - requires WRITE scope on destination platform; adds missing tracks, optionally removes extras (FULL_SYNC)
+   - returns summary `{ addedCount, removedCount, skippedCount, skippedTracks }`, where skipped tracks include `NO_EXACT_MATCH`
 
 ## Failure Tips
 - 401/403: ensure you pass `Authorization: Bearer <token>` from `/auth/verify-otp`.

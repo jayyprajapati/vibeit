@@ -139,7 +139,7 @@ class YtmController extends StateNotifier<AsyncValue<YtmState>> {
     }
   }
 
-  Future<void> startConnectFlow() async {
+  Future<void> startConnectFlow({bool requestWrite = false}) async {
     final token = _requireToken();
     final current = state.valueOrNull ?? YtmState.initial();
     state = AsyncValue.data(
@@ -147,7 +147,7 @@ class YtmController extends StateNotifier<AsyncValue<YtmState>> {
     );
 
     try {
-      final authUrl = await _repo.getAuthUrl(token);
+      final authUrl = await _repo.getAuthUrl(token, requestWrite: requestWrite);
       final launched = await launchUrl(
         Uri.parse(authUrl.url),
         mode: LaunchMode.externalApplication,

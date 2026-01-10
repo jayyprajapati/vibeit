@@ -1,6 +1,8 @@
 import { NextFunction, Request, Response } from "express";
 import Otp from "../models/Otp";
 import User, { IUser } from "../models/User";
+import SpotifyAccount from "../models/SpotifyAccount";
+import YtmAccount from "../models/YtmAccount";
 import env from "../config/env";
 import { generateOtp, hashOtp, normalizeEmail, verifyOtpHash } from "../utils/otp";
 import { signToken } from "../utils/jwt";
@@ -94,6 +96,33 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
     }
 
     return res.json({ user: serializeUser(user) });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+export const getPlatformAccess = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const [spotify, ytm] = await Promise.all([
+      SpotifyAccount.findOne({ userId }),
+      YtmAccount.findOne({ userId }),
+    ]);
+
+    return res.json({
+      spotify: {
+        connected: !!spotify,
+        scopeLevel: spotify?.scopeLevel || "NONE",
+      },
+      ytm: {
+        connected: !!ytm,
+        scopeLevel: ytm?.scopeLevel || "NONE",
+      },
+    });
   } catch (error) {
     return next(error);
   }
