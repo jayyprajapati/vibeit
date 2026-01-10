@@ -4,12 +4,15 @@ import jwt from "jsonwebtoken";
 import env from "../config/env";
 import SpotifyAccount from "../models/SpotifyAccount";
 import SpotifyPlaylist, { ISpotifyPlaylist } from "../models/SpotifyPlaylist";
+import Playlist from "../models/Playlist";
 import {
   SpotifyRemotePlaylist,
   buildSpotifyAuthUrl,
   exchangeCodeForToken,
   fetchSpotifyPlaylists,
+  fetchSpotifyPlaylistWithTracks,
   refreshAccessToken,
+  SpotifyTokenExpiredError,
 } from "../utils/spotify";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -306,6 +309,111 @@ export const syncSpotifyNow = async (req: Request, res: Response, next: NextFunc
     const response = await fetchAndCachePlaylists(userId, true);
     return res.json(response);
   } catch (error) {
+    return next(error);
+  }
+};
+
+export const importSpotifyPlaylist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    const spotifyPlaylistId = (req.params.spotifyPlaylistId || "").trim();
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!spotifyPlaylistId) {
+      return res.status(400).json({ error: "Spotify playlist id is required" });
+    }
+
+    const attemptImport = async (accessToken: string) => {
+      const remote = await fetchSpotifyPlaylistWithTracks(accessToken, spotifyPlaylistId);
+
+      const skippedTracks: Array<{ name: string; reason: string }> = [];
+      const mappedTracks = remote.tracks.map((track) => {
+        const title = track.title.trim();
+        const artist = track.artists.join(", ").trim();
+        const durationSeconds = track.durationMs ? Math.round(track.durationMs / 1000) : 0;
+        const album = (track.album?.trim() || "Unknown Album").trim();
+
+        if (!title) {
+          skippedTracks.push({ name: "(untitled track)", reason: "Missing title" });
+          return null;
+        }
+
+        if (!artist) {
+          skippedTracks.push({ name: title, reason: "Missing artist" });
+          return null;
+        }
+
+        if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+          skippedTracks.push({ name: title, reason: "Missing duration" });
+          return null;
+        }
+
+        return {
+          title,
+          artist,
+          album,
+          duration: durationSeconds,
+        };
+      });
+
+      const tracks = mappedTracks.filter((t): t is NonNullable<typeof t> => t !== null);
+
+      const playlist = await Playlist.create({
+        name: remote.name,
+        ownerId: userId,
+        source: "internal",
+        tracks,
+      });
+
+      return {
+        playlistId: playlist._id.toString(),
+        playlistName: remote.name,
+        importedCount: tracks.length,
+        skippedCount: skippedTracks.length,
+        skippedTracks,
+        totalTracks: remote.tracks.length,
+      };
+    };
+
+    let accessToken = await ensureAccessToken(userId);
+    let refreshed = false;
+
+    while (true) {
+      try {
+        const summary = await attemptImport(accessToken);
+        return res.status(201).json(summary);
+      } catch (error) {
+        if (!refreshed && error instanceof SpotifyTokenExpiredError) {
+          const account = await SpotifyAccount.findOne({ userId });
+          if (!account) {
+            throw new ReauthRequiredError("Spotify account not linked");
+          }
+
+          const refreshedTokens = await refreshAccessToken(account.refreshToken);
+          account.accessToken = refreshedTokens.accessToken;
+          account.refreshToken = refreshedTokens.refreshToken || account.refreshToken;
+          account.expiresAt = new Date(Date.now() + refreshedTokens.expiresIn * 1000);
+          await account.save();
+          accessToken = account.accessToken;
+          refreshed = true;
+          continue;
+        }
+
+        throw error;
+      }
+    }
+  } catch (error) {
+    if (error instanceof ReauthRequiredError) {
+      return res.status(401).json({ error: error.message });
+    }
+
+    if (error instanceof SpotifyTokenExpiredError) {
+      return res.status(401).json({ error: "Spotify access token expired. Please reconnect." });
+    }
+
     return next(error);
   }
 };

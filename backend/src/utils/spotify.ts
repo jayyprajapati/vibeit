@@ -16,6 +16,20 @@ export interface SpotifyRemotePlaylist {
   trackCount: number;
 }
 
+export interface SpotifyRemoteTrack {
+  title: string;
+  artists: string[];
+  album: string | null;
+  durationMs: number | null;
+}
+
+export class SpotifyTokenExpiredError extends Error {
+  constructor(message = "Spotify access token expired") {
+    super(message);
+    this.name = "SpotifyTokenExpiredError";
+  }
+}
+
 const encodeClientCredentials = () => {
   const { spotifyClientId, spotifyClientSecret } = env;
   if (!spotifyClientId || !spotifyClientSecret) {
@@ -137,4 +151,68 @@ export const fetchSpotifyPlaylists = async (
   }
 
   return playlists;
+};
+
+const fetchSpotifyJson = async (url: string, accessToken: string): Promise<Record<string, unknown>> => {
+  const resp = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (resp.status === 401) {
+    throw new SpotifyTokenExpiredError();
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Spotify request failed (${resp.status}): ${text}`);
+  }
+
+  return (await resp.json()) as Record<string, unknown>;
+};
+
+export const fetchSpotifyPlaylistWithTracks = async (
+  accessToken: string,
+  playlistId: string
+): Promise<{ name: string; tracks: SpotifyRemoteTrack[]; total: number }> => {
+  const firstUrl = `${API_BASE_URL}/playlists/${playlistId}?fields=name,tracks(items(track(name,artists(name),album(name),duration_ms)),next,limit,offset,total)`;
+  let data = await fetchSpotifyJson(firstUrl, accessToken);
+
+  const name = (data["name"] as string | undefined) || "Spotify Playlist";
+  const tracks: SpotifyRemoteTrack[] = [];
+  let nextUrl = (data["tracks"] as Record<string, unknown> | undefined)?.["next"] as string | null | undefined;
+
+  const collect = (items: Array<Record<string, unknown>> | undefined) => {
+    if (!items) return;
+    for (const item of items) {
+      const track = item["track"] as Record<string, unknown> | undefined;
+      if (!track) continue;
+      const title = (track["name"] as string | undefined) || "";
+      const artistsArr = (track["artists"] as Array<Record<string, unknown>> | undefined) || [];
+      const artists = artistsArr
+        .map((artist) => (artist["name"] as string | undefined)?.trim())
+        .filter((a): a is string => !!a && a.length > 0);
+      const albumName = (track["album"] as Record<string, unknown> | undefined)?.["name"] as string | undefined;
+      const durationMs = (track["duration_ms"] as number | undefined) ?? null;
+
+      tracks.push({
+        title: title.trim(),
+        artists,
+        album: albumName?.trim() ?? null,
+        durationMs,
+      });
+    }
+  };
+
+  const trackObj = (data["tracks"] as Record<string, unknown> | undefined) || {};
+  collect((trackObj["items"] as Array<Record<string, unknown>> | undefined) || []);
+
+  while (nextUrl) {
+    data = await fetchSpotifyJson(nextUrl, accessToken);
+    const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
+    collect(items);
+    nextUrl = (data["next"] as string | null | undefined) || null;
+  }
+
+  const total = (trackObj["total"] as number | undefined) ?? tracks.length;
+  return { name, tracks, total };
 };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'spotify_controller.dart';
+import 'spotify_import_summary.dart';
 
 class PlatformsTab extends ConsumerWidget {
   const PlatformsTab({super.key});
@@ -316,6 +317,26 @@ class _ConnectedContent extends StatelessWidget {
               name: playlist.name,
               count: playlist.trackCount,
               lastFetched: _formatTimestamp(playlist.lastFetchedAt),
+              isImporting: state.importingIds.contains(playlist.id),
+              onImport: () async {
+                try {
+                  final summary = await controller.importPlaylist(playlist.id);
+                  if (context.mounted) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) =>
+                            SpotifyImportSummaryScreen(summary: summary),
+                      ),
+                    );
+                  }
+                } catch (err) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(err.toString())));
+                  }
+                }
+              },
             ),
           )
         else
@@ -350,11 +371,15 @@ class _PlaylistRow extends StatelessWidget {
     required this.name,
     required this.count,
     required this.lastFetched,
+    required this.isImporting,
+    required this.onImport,
   });
 
   final String name;
   final int count;
   final String lastFetched;
+  final bool isImporting;
+  final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
@@ -386,6 +411,22 @@ class _PlaylistRow extends StatelessWidget {
                   style: const TextStyle(color: Colors.grey),
                 ),
               ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          ElevatedButton.icon(
+            onPressed: isImporting ? null : onImport,
+            icon: isImporting
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.download_rounded),
+            label: Text(isImporting ? 'Importing...' : 'Import to Vibeit'),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size(0, 40),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             ),
           ),
         ],

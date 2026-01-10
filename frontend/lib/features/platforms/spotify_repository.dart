@@ -17,4 +17,8 @@ class SpotifyRepository {
   Future<SpotifyPlaylistsPayload> syncNow(String token) {
     return apiClient.syncSpotifyPlaylists(token);
   }
+
+  Future<SpotifyImportSummary> importPlaylist(String token, String playlistId) {
+    return apiClient.importSpotifyPlaylist(token, playlistId);
+  }
 }

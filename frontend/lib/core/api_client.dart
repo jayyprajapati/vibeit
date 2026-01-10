@@ -135,6 +135,16 @@ class ApiClient {
     return SpotifyPlaylistsPayload.fromJson(data);
   }
 
+  Future<SpotifyImportSummary> importSpotifyPlaylist(
+    String token,
+    String spotifyPlaylistId,
+  ) async {
+    final uri = Uri.parse('$baseUrl/spotify/import/$spotifyPlaylistId');
+    final resp = await _client.post(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return SpotifyImportSummary.fromJson(data);
+  }
+
   Map<String, String> _headers({String? token}) {
     final headers = <String, String>{'Content-Type': 'application/json'};
     if (token != null) {

@@ -3,6 +3,7 @@ import { authMiddleware } from "../middleware/authMiddleware";
 import {
   getSpotifyAuthUrl,
   getSpotifyPlaylists,
+  importSpotifyPlaylist,
   spotifyCallback,
   syncSpotifyNow,
 } from "../controllers/spotifyController";
@@ -13,5 +14,6 @@ router.get("/auth-url", authMiddleware, getSpotifyAuthUrl);
 router.get("/callback", spotifyCallback);
 router.get("/playlists", authMiddleware, getSpotifyPlaylists);
 router.post("/sync-now", authMiddleware, syncSpotifyNow);
+router.post("/import/:spotifyPlaylistId", authMiddleware, importSpotifyPlaylist);
 
 export default router;

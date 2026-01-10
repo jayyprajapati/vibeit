@@ -17,7 +17,8 @@ class SpotifyState {
     this.message,
     this.isSyncing = false,
     this.isAuthorizing = false,
-  });
+    Set<String>? importingIds,
+  }) : importingIds = importingIds ?? const <String>{};
 
   final bool connected;
   final List<SpotifyPlaylistSummary> playlists;
@@ -29,6 +30,7 @@ class SpotifyState {
   final String? message;
   final bool isSyncing;
   final bool isAuthorizing;
+  final Set<String> importingIds;
 
   bool get hasPlaylists => playlists.isNotEmpty;
 
@@ -44,6 +46,7 @@ class SpotifyState {
     bool? isSyncing,
     bool? isAuthorizing,
     bool clearMessage = false,
+    Set<String>? importingIds,
   }) {
     return SpotifyState(
       connected: connected ?? this.connected,
@@ -56,6 +59,7 @@ class SpotifyState {
       message: clearMessage ? null : message ?? this.message,
       isSyncing: isSyncing ?? this.isSyncing,
       isAuthorizing: isAuthorizing ?? this.isAuthorizing,
+      importingIds: importingIds ?? this.importingIds,
     );
   }
 
@@ -69,6 +73,7 @@ class SpotifyState {
       lastSyncedAt: payload.lastSyncedAt,
       nextScheduledSyncAt: payload.nextScheduledSyncAt,
       message: payload.message,
+      importingIds: <String>{},
     );
   }
 
@@ -80,6 +85,7 @@ class SpotifyState {
     reauthRequired: false,
     lastSyncedAt: null,
     nextScheduledSyncAt: null,
+    importingIds: <String>{},
   );
 }
 
@@ -164,6 +170,31 @@ class SpotifyController extends StateNotifier<AsyncValue<SpotifyState>> {
         message: err.toString(),
       );
       state = AsyncValue.data(next);
+      rethrow;
+    }
+  }
+
+  Future<SpotifyImportSummary> importPlaylist(String playlistId) async {
+    final token = _requireToken();
+    final current = state.valueOrNull ?? SpotifyState.initial();
+    final nextImporting = {...current.importingIds, playlistId};
+
+    state = AsyncValue.data(
+      current.copyWith(importingIds: nextImporting, clearMessage: true),
+    );
+
+    try {
+      final summary = await _repo.importPlaylist(token, playlistId);
+      final latest = state.valueOrNull ?? current;
+      final remaining = {...latest.importingIds}..remove(playlistId);
+      state = AsyncValue.data(latest.copyWith(importingIds: remaining));
+      return summary;
+    } catch (err) {
+      final latest = state.valueOrNull ?? current;
+      final remaining = {...latest.importingIds}..remove(playlistId);
+      state = AsyncValue.data(
+        latest.copyWith(importingIds: remaining, message: err.toString()),
+      );
       rethrow;
     }
   }

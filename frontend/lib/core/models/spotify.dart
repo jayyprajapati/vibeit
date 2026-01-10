@@ -67,3 +67,49 @@ class SpotifyAuthUrl {
   const SpotifyAuthUrl(this.url);
   final String url;
 }
+
+class SpotifySkippedTrack {
+  const SpotifySkippedTrack({required this.name, required this.reason});
+
+  final String name;
+  final String reason;
+
+  factory SpotifySkippedTrack.fromJson(Map<String, dynamic> json) {
+    return SpotifySkippedTrack(
+      name: json['name'] as String? ?? 'Unknown track',
+      reason: json['reason'] as String? ?? 'Skipped',
+    );
+  }
+}
+
+class SpotifyImportSummary {
+  const SpotifyImportSummary({
+    required this.playlistId,
+    required this.playlistName,
+    required this.importedCount,
+    required this.skippedCount,
+    required this.totalTracks,
+    required this.skippedTracks,
+  });
+
+  final String playlistId;
+  final String playlistName;
+  final int importedCount;
+  final int skippedCount;
+  final int totalTracks;
+  final List<SpotifySkippedTrack> skippedTracks;
+
+  factory SpotifyImportSummary.fromJson(Map<String, dynamic> json) {
+    final skipped = (json['skippedTracks'] as List<dynamic>? ?? <dynamic>[])
+        .cast<Map<String, dynamic>>();
+
+    return SpotifyImportSummary(
+      playlistId: json['playlistId'] as String,
+      playlistName: json['playlistName'] as String? ?? 'Imported playlist',
+      importedCount: (json['importedCount'] as num? ?? 0).toInt(),
+      skippedCount: (json['skippedCount'] as num? ?? 0).toInt(),
+      totalTracks: (json['totalTracks'] as num? ?? 0).toInt(),
+      skippedTracks: skipped.map(SpotifySkippedTrack.fromJson).toList(),
+    );
+  }
+}
