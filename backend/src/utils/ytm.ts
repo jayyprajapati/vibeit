@@ -308,6 +308,7 @@ const searchYtmWithQuery = async (
         confidence: "rejected",
         queryUsed: query,
         candidatesEvaluated: 0,
+        candidatesRejected: 0,
         allScores: [],
       };
     }
@@ -351,6 +352,7 @@ const searchYtmWithQuery = async (
       confidence: "rejected",
       queryUsed: query,
       candidatesEvaluated: 0,
+      candidatesRejected: 0,
       allScores: [],
     };
   }

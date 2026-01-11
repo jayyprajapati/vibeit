@@ -28,6 +28,7 @@ import {
   NormalizedTrackData,
   VersionKeyword,
 } from "../utils/trackNormalization";
+import { updateArtistFrequency } from "../utils/trackResolver";
 
 // Standardized skip reasons
 export type SkipReason =
@@ -137,6 +138,7 @@ const ensureYtmAccessToken = async (userId: string) => {
 };
 
 const getTrackSets = async (
+  userId: string,
   direction: Direction,
   spotifyAccessToken: string,
   ytmAccessToken: string,
@@ -147,6 +149,16 @@ const getTrackSets = async (
     fetchSpotifyPlaylistWithTracks(spotifyAccessToken, spotifyPlaylistId),
     fetchYtmPlaylistWithTracks(ytmAccessToken, ytmPlaylistId),
   ]);
+
+  // Update artist frequency cache for intelligent artist identification
+  const allArtists: string[] = [];
+  for (const t of spotifyPlaylist.tracks) {
+    allArtists.push(...t.artists);
+  }
+  for (const t of ytmPlaylist.tracks) {
+    if (t.artist) allArtists.push(t.artist);
+  }
+  updateArtistFrequency(userId, allArtists);
 
   const spotifyTracks: NormalizedTrack[] = spotifyPlaylist.tracks
     .map((t) => {
@@ -207,6 +219,7 @@ export const previewSync = async (req: Request, res: Response, next: NextFunctio
     }
 
     const { common, toAdd, toRemove, spotifyPlaylist, ytmPlaylist } = await getTrackSets(
+      userId,
       direction,
       spotifyAccessToken,
       ytmAccessToken,
@@ -319,6 +332,7 @@ export const executeSync = async (req: Request, res: Response, next: NextFunctio
     }
 
     const { toAdd, toRemove, spotifyPlaylist, ytmPlaylist, destSet } = await getTrackSets(
+      userId,
       direction,
       spotifyAccessToken,
       ytmAccessToken,

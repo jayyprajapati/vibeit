@@ -215,6 +215,7 @@ const searchSpotifyWithQuery = async (
       confidence: "rejected" as const,
       queryUsed: query,
       candidatesEvaluated: 0,
+      candidatesRejected: 0,
       allScores: [],
     };
   }

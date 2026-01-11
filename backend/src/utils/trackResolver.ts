@@ -1,56 +1,149 @@
 /**
- * Track Resolver Module
- * Robust scoring-based track resolution for cross-platform sync
+ * Intelligent Track Resolution Module
+ * Robust matching for Spotify ↔ YouTube Music sync
  *
- * Uses token overlap scoring instead of exact matching to achieve
- * 90-95% match rate on real-world playlists.
+ * Features:
+ * - Advanced title parsing and cleanup
+ * - Bad-variant exclusion (remix, slowed, low freq, etc.)
+ * - Good-variant prioritization (official audio, topic channels)
+ * - Frequency-based artist identification
+ * - Multi-stage search with fallbacks
+ * - Explainable scoring system
  */
 
 // ============================================================================
-// TOKENIZATION
+// BAD VARIANTS - These should be EXCLUDED or heavily penalized
 // ============================================================================
 
-// Common noise words to filter out during tokenization
+const BAD_VARIANT_PATTERNS = [
+    /\blow\s*freq(uency)?\b/i,
+    /\bslowed(\s*(and|\+|&)\s*reverb)?\b/i,
+    /\breverb(ed)?\b/i,
+    /\bnightcore\b/i,
+    /\bkaraoke\b/i,
+    /\binstrumental\b/i,
+    /\b8\s*d\s*audio\b/i,
+    /\bbassboosted\b/i,
+    /\bbass\s*boosted\b/i,
+    /\bspeed\s*up\b/i,
+    /\bsped\s*up\b/i,
+    /\bchipmunk\b/i,
+    /\bpitched\b/i,
+    /\blofi\b/i,
+    /\blo-?fi\b/i,
+];
+
+// Patterns that indicate a cover or non-original version
+const COVER_PATTERNS = [
+    /\bcover\b/i,
+    /\bversion\s+by\b/i,
+    /\bperformed\s+by\b/i,
+    /\btribute\b/i,
+    /\bin\s+the\s+style\s+of\b/i,
+];
+
+// Remix pattern - only penalize if source doesn't have remix
+const REMIX_PATTERN = /\bremix\b/i;
+const LIVE_PATTERN = /\blive\b/i;
+const ACOUSTIC_PATTERN = /\bacoustic\b/i;
+
+// ============================================================================
+// GOOD VARIANTS - These should be prioritized
+// ============================================================================
+
+const GOOD_INDICATORS = {
+    topicChannel: /\s*-\s*topic$/i,
+    vevoChannel: /vevo$/i,
+    officialAudio: /\bofficial\s*(audio|song)\b/i,
+    officialVideo: /\bofficial\s*(music\s*)?video\b/i,
+    fromAlbum: /\bfrom\s+(the\s+)?album\b/i,
+};
+
+// ============================================================================
+// TITLE SEPARATORS AND NOISE REMOVAL
+// ============================================================================
+
+// Common separators in YouTube titles
+const TITLE_SEPARATORS = /\s*[|•:–—]\s*/g;
+
+// Patterns to strip from titles before matching
+const TITLE_NOISE_PATTERNS = [
+    // Parenthetical/bracketed content (but extract first)
+    /\([^)]*\)/g,
+    /\[[^\]]*\]/g,
+    /\{[^}]*\}/g,
+
+    // Common suffixes
+    /\s*-\s*topic$/i,
+    /\s*vevo$/i,
+    /\s*-\s*official\s*(audio|video|music\s*video)?$/i,
+    /\s*-\s*audio$/i,
+    /\s*-\s*lyric(s)?\s*(video)?$/i,
+    /\s*-\s*visuali[sz]er$/i,
+    /\s*-\s*full\s*(song|video|audio)$/i,
+    /\s*\|\s*.*$/,  // Everything after pipe
+
+    // Quality/format indicators
+    /\b(hd|hq|4k|1080p|720p)\b/gi,
+    /\bfull\s*(song|video|audio)\b/gi,
+    /\bnew\s*(song|video|audio)\s*\d*\b/gi,
+
+    // Year indicators at end
+    /\s*\(\d{4}\)\s*$/,
+    /\s*\d{4}\s*$/,
+];
+
+// Noise words to filter during tokenization
 const NOISE_WORDS = new Set([
     "the", "a", "an", "and", "or", "of", "in", "on", "at", "to", "for",
     "with", "by", "from", "up", "out", "is", "it", "as", "be", "are",
     "was", "were", "been", "being", "have", "has", "had", "do", "does",
     "did", "will", "would", "could", "should", "may", "might", "must",
-    "ft", "feat", "featuring", "prod", "produced",
+    "ft", "feat", "featuring", "prod", "produced", "presents",
+    "song", "audio", "video", "music", "official", "full",
 ]);
 
-// Patterns to strip before tokenization
-const STRIP_PATTERNS = [
-    /\([^)]*\)/g,           // (...)
-    /\[[^\]]*\]/g,          // [...]
-    /\{[^}]*\}/g,           // {...}
-    /\s*-\s*topic$/i,       // - Topic suffix
-    /\s*vevo$/i,            // VEVO suffix
-    /\s*-\s*official\s*(audio|video|music\s*video)?$/i,
-    /\s*-\s*lyric(s)?\s*(video)?$/i,
-    /\s*-\s*audio$/i,
-    /\s*-\s*visuali[sz]er$/i,
-    /\s*\(official\s*(audio|video|music\s*video)?\)$/i,
-    /\s*\[official\s*(audio|video|music\s*video)?\]$/i,
-];
+// ============================================================================
+// TOKENIZATION
+// ============================================================================
 
 /**
- * Tokenize a string into an array of lowercase, cleaned tokens.
- * Removes noise words and short tokens.
+ * Aggressively clean a title for matching.
+ * Removes noise, separators, and extracts core content.
+ */
+export const cleanTitle = (title: string): string => {
+    if (!title) return "";
+
+    let cleaned = title.toLowerCase();
+
+    // Remove noise patterns
+    for (const pattern of TITLE_NOISE_PATTERNS) {
+        cleaned = cleaned.replace(pattern, " ");
+    }
+
+    // Split on separators and take first meaningful segment
+    const segments = cleaned.split(TITLE_SEPARATORS).filter(Boolean);
+    if (segments.length > 1) {
+        // Usually the song title is the first or second segment after artist
+        cleaned = segments.slice(0, 2).join(" ");
+    }
+
+    // Normalize whitespace
+    cleaned = cleaned.replace(/\s+/g, " ").trim();
+
+    return cleaned;
+};
+
+/**
+ * Tokenize a string into cleaned, lowercase tokens.
  */
 export const tokenize = (text: string): string[] => {
     if (!text) return [];
 
-    let cleaned = text.toLowerCase();
+    const cleaned = text.toLowerCase().replace(/[^a-z0-9\s]/g, " ");
 
-    // Apply strip patterns
-    for (const pattern of STRIP_PATTERNS) {
-        cleaned = cleaned.replace(pattern, " ");
-    }
-
-    // Split on non-alphanumeric characters
     const tokens = cleaned
-        .split(/[^a-z0-9]+/g)
+        .split(/\s+/)
         .filter((t) => t.length >= 2)
         .filter((t) => !NOISE_WORDS.has(t));
 
@@ -59,7 +152,6 @@ export const tokenize = (text: string): string[] => {
 
 /**
  * Calculate what percentage of tokensA are found in tokensB.
- * Returns a value from 0 to 100.
  */
 export const tokenOverlap = (tokensA: string[], tokensB: string[]): number => {
     if (tokensA.length === 0) return 0;
@@ -71,8 +163,7 @@ export const tokenOverlap = (tokensA: string[], tokensB: string[]): number => {
 };
 
 /**
- * Calculate bidirectional token overlap (Jaccard-like similarity).
- * Returns a value from 0 to 100.
+ * Calculate bidirectional token similarity (Jaccard-like).
  */
 export const tokenSimilarity = (tokensA: string[], tokensB: string[]): number => {
     if (tokensA.length === 0 && tokensB.length === 0) return 100;
@@ -88,28 +179,169 @@ export const tokenSimilarity = (tokensA: string[], tokensB: string[]): number =>
 };
 
 // ============================================================================
-// VERSION DETECTION
+// BAD VARIANT DETECTION
 // ============================================================================
 
-export type VersionType = "remix" | "live" | "acoustic" | "cover" | "instrumental" | "radio" | null;
-
-const VERSION_PATTERNS: Array<{ type: VersionType; pattern: RegExp }> = [
-    { type: "remix", pattern: /\bremix\b/i },
-    { type: "live", pattern: /\blive\b/i },
-    { type: "acoustic", pattern: /\bacoustic\b/i },
-    { type: "cover", pattern: /\bcover\b/i },
-    { type: "instrumental", pattern: /\binstrumental\b/i },
-    { type: "radio", pattern: /\bradio\s*(edit|version)?\b/i },
-];
+export interface VariantAnalysis {
+    isBadVariant: boolean;
+    isRemix: boolean;
+    isLive: boolean;
+    isAcoustic: boolean;
+    isCover: boolean;
+    badPatternMatched: string | null;
+}
 
 /**
- * Detect the version type of a track from its title.
+ * Analyze a title for bad variants that should be excluded.
  */
-export const detectVersion = (title: string): VersionType => {
-    for (const { type, pattern } of VERSION_PATTERNS) {
-        if (pattern.test(title)) return type;
+export const analyzeVariant = (title: string): VariantAnalysis => {
+    const titleLower = title.toLowerCase();
+
+    // Check for bad patterns
+    for (const pattern of BAD_VARIANT_PATTERNS) {
+        if (pattern.test(titleLower)) {
+            return {
+                isBadVariant: true,
+                isRemix: REMIX_PATTERN.test(titleLower),
+                isLive: LIVE_PATTERN.test(titleLower),
+                isAcoustic: ACOUSTIC_PATTERN.test(titleLower),
+                isCover: COVER_PATTERNS.some((p) => p.test(titleLower)),
+                badPatternMatched: pattern.source,
+            };
+        }
     }
-    return null;
+
+    // Check for covers
+    for (const pattern of COVER_PATTERNS) {
+        if (pattern.test(titleLower)) {
+            return {
+                isBadVariant: true,
+                isRemix: false,
+                isLive: false,
+                isAcoustic: false,
+                isCover: true,
+                badPatternMatched: pattern.source,
+            };
+        }
+    }
+
+    return {
+        isBadVariant: false,
+        isRemix: REMIX_PATTERN.test(titleLower),
+        isLive: LIVE_PATTERN.test(titleLower),
+        isAcoustic: ACOUSTIC_PATTERN.test(titleLower),
+        isCover: false,
+        badPatternMatched: null,
+    };
+};
+
+// ============================================================================
+// GOOD INDICATOR DETECTION
+// ============================================================================
+
+export interface GoodIndicators {
+    isTopicChannel: boolean;
+    isVevoChannel: boolean;
+    hasOfficialAudio: boolean;
+    hasOfficialVideo: boolean;
+    totalBonus: number;
+}
+
+/**
+ * Analyze for positive quality indicators.
+ */
+export const analyzeGoodIndicators = (
+    title: string,
+    channel: string
+): GoodIndicators => {
+    const titleLower = title.toLowerCase();
+    const channelLower = channel.toLowerCase();
+
+    const isTopicChannel = GOOD_INDICATORS.topicChannel.test(channelLower);
+    const isVevoChannel = GOOD_INDICATORS.vevoChannel.test(channelLower);
+    const hasOfficialAudio = GOOD_INDICATORS.officialAudio.test(titleLower);
+    const hasOfficialVideo = GOOD_INDICATORS.officialVideo.test(titleLower);
+
+    let totalBonus = 0;
+    if (isTopicChannel) totalBonus += 25; // Topic channels are auto-generated, very reliable
+    if (isVevoChannel) totalBonus += 20; // VEVO is official
+    if (hasOfficialAudio) totalBonus += 15;
+    if (hasOfficialVideo) totalBonus += 10;
+
+    return {
+        isTopicChannel,
+        isVevoChannel,
+        hasOfficialAudio,
+        hasOfficialVideo,
+        totalBonus: Math.min(totalBonus, 35), // Cap total bonus
+    };
+};
+
+// ============================================================================
+// ARTIST FREQUENCY CACHE
+// ============================================================================
+
+// Global cache for artist frequency across user's library
+const artistFrequencyCache = new Map<string, Map<string, number>>();
+
+/**
+ * Build artist frequency map from playlist data.
+ * Called when playlists are fetched.
+ */
+export const updateArtistFrequency = (
+    userId: string,
+    artists: string[]
+): void => {
+    if (!artistFrequencyCache.has(userId)) {
+        artistFrequencyCache.set(userId, new Map());
+    }
+
+    const userCache = artistFrequencyCache.get(userId)!;
+
+    for (const artist of artists) {
+        const normalized = artist.toLowerCase().trim();
+        if (normalized.length < 2) continue;
+
+        const count = userCache.get(normalized) || 0;
+        userCache.set(normalized, count + 1);
+    }
+};
+
+/**
+ * Get artist frequency score (0-100).
+ * Higher = more common in user's library = more likely to be correct artist.
+ */
+export const getArtistFrequencyScore = (userId: string, artist: string): number => {
+    const userCache = artistFrequencyCache.get(userId);
+    if (!userCache || userCache.size === 0) return 50; // Neutral if no data
+
+    const normalized = artist.toLowerCase().trim();
+    const count = userCache.get(normalized) || 0;
+
+    if (count === 0) return 10; // Unknown artist - very low
+    if (count === 1) return 30;
+    if (count <= 3) return 50;
+    if (count <= 10) return 70;
+    return 90; // Very common artist
+};
+
+/**
+ * Extract potential artist names from a noisy title.
+ */
+export const extractPotentialArtists = (title: string): string[] => {
+    // Split on common separators
+    const parts = title
+        .split(/\s*[-|•:×x]\s*/i)
+        .map((p) => p.trim())
+        .filter((p) => p.length > 1);
+
+    // Also check for "ft." or "feat." patterns
+    const featMatch = title.match(/(?:ft\.?|feat\.?|featuring)\s+([^,\-|]+)/i);
+    if (featMatch) {
+        parts.push(featMatch[1].trim());
+    }
+
+    return parts;
 };
 
 // ============================================================================
@@ -117,13 +349,12 @@ export const detectVersion = (title: string): VersionType => {
 // ============================================================================
 
 export interface ScoreBreakdown {
-    titleOverlap: number;      // 0-100: source title tokens in candidate title
-    artistInTitle: number;     // 0-100: source artist tokens in candidate title
-    artistInChannel: number;   // 0-100: source artist tokens in channel name
-    artistInDescription: number; // 0-100: source artist tokens in description
-    sourceTypeBonus: number;   // 0-25: bonus for Topic/VEVO/Official
-    versionPenalty: number;    // 0-50: penalty for version mismatch
-    exactTitleBonus: number;   // 0-20: bonus for exact normalized title match
+    titleSimilarity: number;
+    artistMatch: number;
+    goodIndicatorBonus: number;
+    badVariantPenalty: number;
+    versionMismatchPenalty: number;
+    artistFrequencyBonus: number;
 }
 
 export interface ScoringResult {
@@ -133,11 +364,16 @@ export interface ScoringResult {
     score: number;
     confidence: "high" | "medium" | "low" | "rejected";
     breakdown: ScoreBreakdown;
+    variantAnalysis: VariantAnalysis;
+    goodIndicators: GoodIndicators;
+    rejected: boolean;
+    rejectionReason: string | null;
 }
 
 export interface SourceTrack {
     title: string;
     artist: string;
+    userId?: string; // For frequency-based scoring
 }
 
 export interface CandidateTrack {
@@ -149,92 +385,85 @@ export interface CandidateTrack {
 
 /**
  * Score a candidate track against a source track.
- * Returns a score from 0-100 with detailed breakdown.
+ * Returns detailed breakdown with rejection logic.
  */
 export const scoreCandidate = (
     source: SourceTrack,
     candidate: CandidateTrack
 ): ScoringResult => {
-    const sourceTitleTokens = tokenize(source.title);
+    // Analyze for bad variants FIRST
+    const variantAnalysis = analyzeVariant(candidate.title);
+    const sourceVariant = analyzeVariant(source.title);
+
+    // IMMEDIATE REJECTION for bad variants (unless source is also that variant)
+    if (variantAnalysis.isBadVariant && !sourceVariant.isBadVariant) {
+        return createRejectedResult(
+            candidate,
+            `Bad variant detected: ${variantAnalysis.badPatternMatched}`,
+            variantAnalysis
+        );
+    }
+
+    // Version mismatch penalty (remix, live, acoustic)
+    let versionMismatchPenalty = 0;
+    if (variantAnalysis.isRemix !== sourceVariant.isRemix) {
+        versionMismatchPenalty += 40;
+    }
+    if (variantAnalysis.isLive !== sourceVariant.isLive) {
+        versionMismatchPenalty += 30;
+    }
+    if (variantAnalysis.isAcoustic !== sourceVariant.isAcoustic) {
+        versionMismatchPenalty += 25;
+    }
+
+    // Clean and tokenize
+    const sourceCleanTitle = cleanTitle(source.title);
+    const candidateCleanTitle = cleanTitle(candidate.title);
+
+    const sourceTitleTokens = tokenize(sourceCleanTitle);
+    const candidateTitleTokens = tokenize(candidateCleanTitle);
     const sourceArtistTokens = tokenize(source.artist);
 
-    const candidateTitleTokens = tokenize(candidate.title);
+    // Title similarity
+    const titleSimilarity = tokenSimilarity(sourceTitleTokens, candidateTitleTokens);
+
+    // Artist matching - check in title, channel, and description
     const candidateChannelTokens = tokenize(candidate.channel);
     const candidateDescTokens = tokenize(candidate.description || "");
+    const allCandidateTokens = [...candidateTitleTokens, ...candidateChannelTokens, ...candidateDescTokens];
 
-    // Title overlap: how many source title tokens are in candidate title?
-    const titleOverlap = tokenOverlap(sourceTitleTokens, candidateTitleTokens);
+    const artistMatch = tokenOverlap(sourceArtistTokens, allCandidateTokens);
 
-    // Artist presence in various places
-    const artistInTitle = tokenOverlap(sourceArtistTokens, candidateTitleTokens);
-    const artistInChannel = tokenOverlap(sourceArtistTokens, candidateChannelTokens);
-    const artistInDescription = tokenOverlap(sourceArtistTokens, candidateDescTokens);
+    // Good indicators
+    const goodIndicators = analyzeGoodIndicators(candidate.title, candidate.channel);
 
-    // Best artist match from any source
-    const bestArtistMatch = Math.max(artistInTitle, artistInChannel, artistInDescription);
-
-    // Source type bonus
-    let sourceTypeBonus = 0;
-    const channelLower = candidate.channel.toLowerCase();
-    const titleLower = candidate.title.toLowerCase();
-
-    if (channelLower.includes("topic")) {
-        sourceTypeBonus += 20; // Topic channels are official auto-generated
-    } else if (channelLower.includes("vevo")) {
-        sourceTypeBonus += 15; // VEVO is official
-    }
-
-    if (titleLower.includes("official audio") || titleLower.includes("official video")) {
-        sourceTypeBonus += 5;
-    }
-
-    // Cap source bonus
-    sourceTypeBonus = Math.min(25, sourceTypeBonus);
-
-    // Version mismatch penalty
-    const sourceVersion = detectVersion(source.title);
-    const candidateVersion = detectVersion(candidate.title);
-    let versionPenalty = 0;
-
-    if (sourceVersion !== candidateVersion) {
-        // Penalize version mismatches heavily
-        if (sourceVersion === null && candidateVersion !== null) {
-            // Source is original, candidate is a version - heavy penalty
-            versionPenalty = 40;
-        } else if (sourceVersion !== null && candidateVersion === null) {
-            // Source is a version, candidate is original - heavy penalty
-            versionPenalty = 40;
-        } else {
-            // Different versions - very heavy penalty
-            versionPenalty = 50;
-        }
-    }
-
-    // Exact title bonus (after normalization)
-    let exactTitleBonus = 0;
-    if (tokenSimilarity(sourceTitleTokens, candidateTitleTokens) >= 90) {
-        exactTitleBonus = 20;
-    } else if (tokenSimilarity(sourceTitleTokens, candidateTitleTokens) >= 80) {
-        exactTitleBonus = 10;
+    // Artist frequency bonus (if userId provided)
+    let artistFrequencyBonus = 0;
+    if (source.userId) {
+        const potentialArtists = extractPotentialArtists(candidate.title);
+        const channelScore = getArtistFrequencyScore(source.userId, candidate.channel);
+        const titleScores = potentialArtists.map((a) => getArtistFrequencyScore(source.userId!, a));
+        const maxTitleScore = titleScores.length > 0 ? Math.max(...titleScores) : 0;
+        artistFrequencyBonus = Math.round((channelScore + maxTitleScore) / 20); // 0-10 bonus
     }
 
     // Calculate final score
-    // Weights: title match is most important, then artist, then bonuses
     const baseScore =
-        titleOverlap * 0.45 +      // 45% weight on title match
-        bestArtistMatch * 0.30 +   // 30% weight on artist match
-        sourceTypeBonus +           // Up to 25 bonus points
-        exactTitleBonus;            // Up to 20 bonus points
+        (titleSimilarity * 0.50) + // 50% weight on title match
+        (artistMatch * 0.30) + // 30% weight on artist match
+        goodIndicators.totalBonus +
+        artistFrequencyBonus;
 
-    const finalScore = Math.max(0, Math.min(100, baseScore - versionPenalty));
+    const penalties = versionMismatchPenalty;
+    const finalScore = Math.max(0, Math.min(100, baseScore - penalties));
 
-    // Determine confidence level
+    // Determine confidence
     let confidence: "high" | "medium" | "low" | "rejected";
     if (finalScore >= 70) {
         confidence = "high";
-    } else if (finalScore >= 50) {
+    } else if (finalScore >= 55) {
         confidence = "medium";
-    } else if (finalScore >= 35) {
+    } else if (finalScore >= 40) {
         confidence = "low";
     } else {
         confidence = "rejected";
@@ -247,16 +476,49 @@ export const scoreCandidate = (
         score: Math.round(finalScore),
         confidence,
         breakdown: {
-            titleOverlap,
-            artistInTitle,
-            artistInChannel,
-            artistInDescription,
-            sourceTypeBonus,
-            versionPenalty,
-            exactTitleBonus,
+            titleSimilarity,
+            artistMatch,
+            goodIndicatorBonus: goodIndicators.totalBonus,
+            badVariantPenalty: 0, // Didn't reject, so no penalty applied
+            versionMismatchPenalty,
+            artistFrequencyBonus,
         },
+        variantAnalysis,
+        goodIndicators,
+        rejected: false,
+        rejectionReason: null,
     };
 };
+
+const createRejectedResult = (
+    candidate: CandidateTrack,
+    reason: string,
+    variantAnalysis: VariantAnalysis
+): ScoringResult => ({
+    candidateId: candidate.id,
+    candidateTitle: candidate.title,
+    candidateChannel: candidate.channel,
+    score: 0,
+    confidence: "rejected",
+    breakdown: {
+        titleSimilarity: 0,
+        artistMatch: 0,
+        goodIndicatorBonus: 0,
+        badVariantPenalty: 100,
+        versionMismatchPenalty: 0,
+        artistFrequencyBonus: 0,
+    },
+    variantAnalysis,
+    goodIndicators: {
+        isTopicChannel: false,
+        isVevoChannel: false,
+        hasOfficialAudio: false,
+        hasOfficialVideo: false,
+        totalBonus: 0,
+    },
+    rejected: true,
+    rejectionReason: reason,
+});
 
 // ============================================================================
 // RESOLUTION
@@ -271,18 +533,15 @@ export interface ResolutionResult {
     confidence: "high" | "medium" | "low" | "rejected";
     queryUsed: string;
     candidatesEvaluated: number;
+    candidatesRejected: number;
     allScores: ScoringResult[];
 }
 
-/**
- * Minimum score required to accept a match.
- * Tracks below this threshold are skipped.
- */
-const ACCEPTANCE_THRESHOLD = 45;
+const ACCEPTANCE_THRESHOLD = 40;
 
 /**
  * Resolve the best matching candidate from a list.
- * Returns the highest-scoring candidate above the acceptance threshold.
+ * Filters out bad variants first, then scores remaining.
  */
 export const resolveFromCandidates = (
     source: SourceTrack,
@@ -290,30 +549,22 @@ export const resolveFromCandidates = (
     queryUsed: string
 ): ResolutionResult => {
     if (candidates.length === 0) {
-        return {
-            success: false,
-            matchedId: null,
-            matchedTitle: null,
-            matchedChannel: null,
-            score: 0,
-            confidence: "rejected",
-            queryUsed,
-            candidatesEvaluated: 0,
-            allScores: [],
-        };
+        return createEmptyResult(queryUsed);
     }
 
     // Score all candidates
     const allScores = candidates.map((c) => scoreCandidate(source, c));
 
-    // Sort by score descending
-    allScores.sort((a, b) => b.score - a.score);
+    // Separate rejected from valid
+    const rejected = allScores.filter((s) => s.rejected);
+    const valid = allScores.filter((s) => !s.rejected);
 
-    // Get best candidate
-    const best = allScores[0];
+    // Sort valid by score descending
+    valid.sort((a, b) => b.score - a.score);
 
-    // Check if it meets the threshold
-    if (best.score >= ACCEPTANCE_THRESHOLD) {
+    // Get best valid candidate
+    if (valid.length > 0 && valid[0].score >= ACCEPTANCE_THRESHOLD) {
+        const best = valid[0];
         return {
             success: true,
             matchedId: best.candidateId,
@@ -323,67 +574,90 @@ export const resolveFromCandidates = (
             confidence: best.confidence === "rejected" ? "low" : best.confidence,
             queryUsed,
             candidatesEvaluated: candidates.length,
+            candidatesRejected: rejected.length,
             allScores,
         };
     }
 
-    // No match above threshold
+    // No valid match above threshold
     return {
         success: false,
         matchedId: null,
         matchedTitle: null,
         matchedChannel: null,
-        score: best.score,
+        score: valid.length > 0 ? valid[0].score : 0,
         confidence: "rejected",
         queryUsed,
         candidatesEvaluated: candidates.length,
+        candidatesRejected: rejected.length,
         allScores,
     };
 };
+
+const createEmptyResult = (queryUsed: string): ResolutionResult => ({
+    success: false,
+    matchedId: null,
+    matchedTitle: null,
+    matchedChannel: null,
+    score: 0,
+    confidence: "rejected",
+    queryUsed,
+    candidatesEvaluated: 0,
+    candidatesRejected: 0,
+    allScores: [],
+});
 
 // ============================================================================
 // SEARCH QUERY GENERATION
 // ============================================================================
 
 /**
- * Generate multiple search queries to try for a track.
- * Ordered from most specific to least specific.
+ * Generate multiple search queries with different strategies.
  */
 export const generateSearchQueries = (source: SourceTrack): string[] => {
     const queries: string[] = [];
     const { title, artist } = source;
 
-    // Clean title (remove parenthetical content for search)
-    const cleanTitle = title
+    // Clean the title
+    const cleanedTitle = cleanTitle(title);
+
+    // Get just the core title (first segment before separators)
+    const coreTitle = title
+        .split(/\s*[-|•:]\s*/)[0]
         .replace(/\([^)]*\)/g, "")
         .replace(/\[[^\]]*\]/g, "")
         .trim();
 
-    // 1. Full title + artist
+    // Strategy 1: Full original title + artist
     queries.push(`${title} ${artist}`);
 
-    // 2. Clean title + artist
-    if (cleanTitle !== title) {
-        queries.push(`${cleanTitle} ${artist}`);
+    // Strategy 2: Cleaned title + artist
+    if (cleanedTitle !== title.toLowerCase()) {
+        queries.push(`${cleanedTitle} ${artist}`);
     }
 
-    // 3. Title + artist + "official audio" (for YouTube)
-    queries.push(`${cleanTitle} ${artist} official audio`);
+    // Strategy 3: Core title + artist
+    if (coreTitle.toLowerCase() !== cleanedTitle) {
+        queries.push(`${coreTitle} ${artist}`);
+    }
 
-    // 4. Title + artist + "topic" (for auto-generated)
-    queries.push(`${cleanTitle} ${artist} topic`);
+    // Strategy 4: Add "official audio" for better results
+    queries.push(`${coreTitle} ${artist} official audio`);
 
-    // 5. Just title + artist + "audio" (fallback)
-    queries.push(`${cleanTitle} ${artist} audio`);
+    // Strategy 5: Add "topic" for auto-generated channels
+    queries.push(`${coreTitle} ${artist} topic`);
 
-    // 6. Just title (very fallback, need strict artist verification)
-    queries.push(cleanTitle);
+    // Strategy 6: Just the song title (fallback)
+    queries.push(coreTitle);
 
-    // Remove duplicates while preserving order
+    // Strategy 7: Artist + "songs" (very fallback)
+    queries.push(`${artist} ${coreTitle}`);
+
+    // Remove duplicates
     const seen = new Set<string>();
     return queries.filter((q) => {
         const normalized = q.toLowerCase().trim();
-        if (seen.has(normalized)) return false;
+        if (seen.has(normalized) || normalized.length < 3) return false;
         seen.add(normalized);
         return true;
     });
@@ -393,9 +667,6 @@ export const generateSearchQueries = (source: SourceTrack): string[] => {
 // LOGGING
 // ============================================================================
 
-/**
- * Log detailed resolution information for debugging.
- */
 export const logResolution = (
     source: SourceTrack,
     result: ResolutionResult,
@@ -412,20 +683,36 @@ export const logResolution = (
             score: result.score,
             confidence: result.confidence,
             queryUsed: result.queryUsed,
+            candidatesEvaluated: result.candidatesEvaluated,
+            candidatesRejected: result.candidatesRejected,
         });
     } else {
-        console.warn(`${prefix} ✗ NO MATCH`, {
-            sourceTitle: source.title,
-            sourceArtist: source.artist,
-            bestScore: result.score,
-            queryUsed: result.queryUsed,
-            candidatesEvaluated: result.candidatesEvaluated,
-            topCandidates: result.allScores.slice(0, 3).map((s) => ({
-                title: s.candidateTitle,
+        const topValid = result.allScores
+            .filter((s) => !s.rejected)
+            .slice(0, 3)
+            .map((s) => ({
+                title: s.candidateTitle.substring(0, 50),
                 channel: s.candidateChannel,
                 score: s.score,
                 breakdown: s.breakdown,
-            })),
+            }));
+
+        const rejectedReasons = result.allScores
+            .filter((s) => s.rejected)
+            .slice(0, 3)
+            .map((s) => ({
+                title: s.candidateTitle.substring(0, 50),
+                reason: s.rejectionReason,
+            }));
+
+        console.warn(`${prefix} ✗ NO MATCH`, {
+            sourceTitle: source.title,
+            sourceArtist: source.artist,
+            queryUsed: result.queryUsed,
+            candidatesEvaluated: result.candidatesEvaluated,
+            candidatesRejected: result.candidatesRejected,
+            topValid,
+            rejectedExamples: rejectedReasons,
         });
     }
 };
