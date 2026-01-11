@@ -1,5 +1,12 @@
 import env from "../config/env";
-import { findBestMatch, tokenizeArtist, tokenizeTitle } from "./catalogMatch";
+import {
+  SourceTrack,
+  CandidateTrack,
+  ResolutionResult,
+  generateSearchQueries,
+  resolveFromCandidates,
+  logResolution,
+} from "./trackResolver";
 
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -227,52 +234,126 @@ export const fetchYtmPlaylistWithTracks = async (
   };
 };
 
+/**
+ * Search YouTube and resolve the best matching track using scoring.
+ * Uses multiple search queries as fallback for maximum match rate.
+ *
+ * @returns Video ID of the best match, or null if no acceptable match found
+ */
 export const searchYtmTrackExact = async (
   accessToken: string,
   title: string,
   artist: string
 ): Promise<string | null> => {
-  const titleTokens = tokenizeTitle(title);
-  if (titleTokens.length === 0) return null;
+  const source: SourceTrack = { title, artist };
+  const queries = generateSearchQueries(source);
 
-  const artistTokens = tokenizeArtist(artist);
-  const queryTokens = [...titleTokens, ...artistTokens];
-  if (queryTokens.length === 0) return null;
+  console.log(`[ytm-search] Resolving: "${title}" by "${artist}"`);
+  console.log(`[ytm-search] Will try ${queries.length} queries`);
 
-  console.log(`YTM Search for tokens: ${queryTokens.join(" ")}`);
+  // Try each query until we find a good match
+  for (const query of queries) {
+    console.log(`[ytm-search] Trying query: "${query}"`);
+
+    const result = await searchYtmWithQuery(accessToken, source, query);
+
+    if (result.success) {
+      logResolution(source, result, "ytm");
+      return result.matchedId;
+    }
+
+    // If we got candidates but no match, log and continue to next query
+    if (result.candidatesEvaluated > 0) {
+      console.log(`[ytm-search] Query "${query}" returned ${result.candidatesEvaluated} candidates, best score: ${result.score}`);
+    }
+  }
+
+  // All queries exhausted, no match found
+  console.warn(`[ytm-search] ✗ FAILED to resolve: "${title}" by "${artist}" after ${queries.length} queries`);
+  return null;
+};
+
+/**
+ * Execute a single YouTube search query and score the results.
+ */
+const searchYtmWithQuery = async (
+  accessToken: string,
+  source: SourceTrack,
+  query: string
+): Promise<ResolutionResult> => {
   const params = new URLSearchParams({
     part: "snippet",
-    q: queryTokens.join(" "),
+    q: query,
     type: "video",
-    videoCategoryId: "10",
-    maxResults: "10",
+    videoCategoryId: "10", // Music category
+    maxResults: "15",      // Get more candidates for better matching
   });
 
   const url = `${API_BASE_URL}/search?${params.toString()}`;
-  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
-  if (resp.status === 401) throw new YtmTokenExpiredError();
-  if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`YouTube search failed (${resp.status}): ${text}`);
+
+  try {
+    const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+    if (resp.status === 401) throw new YtmTokenExpiredError();
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      console.error(`[ytm-search] API error: ${resp.status} - ${text}`);
+      return {
+        success: false,
+        matchedId: null,
+        matchedTitle: null,
+        matchedChannel: null,
+        score: 0,
+        confidence: "rejected",
+        queryUsed: query,
+        candidatesEvaluated: 0,
+        allScores: [],
+      };
+    }
+
+    const data = (await resp.json()) as Record<string, unknown>;
+    const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
+
+    // Convert to CandidateTrack format
+    const candidates = items
+      .map((item): CandidateTrack | null => {
+        const snippet = item["snippet"] as Record<string, unknown> | undefined;
+        const videoId = (item["id"] as Record<string, unknown> | undefined)?.["videoId"] as string | undefined;
+        const videoTitle = (snippet?.["title"] as string | undefined) || "";
+        const channelTitle = (snippet?.["channelTitle"] as string | undefined) || "";
+        const description = (snippet?.["description"] as string | undefined) || "";
+
+        if (!videoId) return null;
+
+        return {
+          id: videoId,
+          title: videoTitle,
+          channel: channelTitle,
+          description,
+        };
+      })
+      .filter((c): c is CandidateTrack => c !== null);
+
+    // Use scoring-based resolution
+    return resolveFromCandidates(source, candidates, query);
+
+  } catch (error) {
+    if (error instanceof YtmTokenExpiredError) throw error;
+
+    console.error(`[ytm-search] Search failed for query "${query}":`, error);
+    return {
+      success: false,
+      matchedId: null,
+      matchedTitle: null,
+      matchedChannel: null,
+      score: 0,
+      confidence: "rejected",
+      queryUsed: query,
+      candidatesEvaluated: 0,
+      allScores: [],
+    };
   }
-
-  const data = (await resp.json()) as Record<string, unknown>;
-  console.log("YTM Search Response :", JSON.stringify(data));
-  const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
-
-  const candidates = items
-    .map((item) => {
-      const snippet = item["snippet"] as Record<string, unknown> | undefined;
-      const vid = (item["id"] as Record<string, unknown> | undefined)?.["videoId"] as string | undefined;
-      const name = (snippet?.["title"] as string | undefined) || "";
-      const channel = (snippet?.["channelTitle"] as string | undefined) || "";
-      const description = (snippet?.["description"] as string | undefined) || "";
-      if (!vid) return null;
-      return { id: vid, title: name, artist: channel, description };
-    })
-    .filter((c): c is { id: string; title: string; artist: string; description: string } => !!c);
-
-  return findBestMatch(title, artist, candidates);
 };
 
 export const addTracksToYtmPlaylist = async (

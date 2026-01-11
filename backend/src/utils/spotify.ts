@@ -1,5 +1,11 @@
 import env from "../config/env";
-import { findBestMatch, tokenizeArtist, tokenizeTitle } from "./catalogMatch";
+import {
+  SourceTrack,
+  CandidateTrack,
+  generateSearchQueries,
+  resolveFromCandidates,
+  logResolution,
+} from "./trackResolver";
 
 const TOKEN_URL = "https://accounts.spotify.com/api/token";
 const API_BASE_URL = "https://api.spotify.com/v1";
@@ -124,41 +130,94 @@ export const refreshAccessToken = async (refreshToken: string): Promise<SpotifyT
 
 const SEARCH_BASE_URL = `${API_BASE_URL}/search`;
 
+/**
+ * Search Spotify and resolve the best matching track using scoring.
+ * Uses multiple search queries as fallback for maximum match rate.
+ *
+ * @returns Spotify URI of the best match, or null if no acceptable match found
+ */
 export const searchSpotifyTrackExact = async (
   accessToken: string,
   title: string,
   artist: string
 ): Promise<string | null> => {
-  const titleTokens = tokenizeTitle(title);
-  if (titleTokens.length === 0) return null;
+  const source: SourceTrack = { title, artist };
+  const queries = generateSearchQueries(source);
 
-  const artistTokens = tokenizeArtist(artist);
-  const queryTokens = [...titleTokens, ...artistTokens];
-  if (queryTokens.length === 0) return null;
+  console.log(`[spotify-search] Resolving: "${title}" by "${artist}"`);
 
-  const query = encodeURIComponent(queryTokens.join(" "));
-  const url = `${SEARCH_BASE_URL}?q=${query}&type=track&limit=8`;
+  // Try each query until we find a good match
+  for (const query of queries) {
+    const result = await searchSpotifyWithQuery(accessToken, source, query);
 
-  const data = await fetchSpotifyJson(url, accessToken);
-  const tracks = ((data["tracks"] as Record<string, unknown> | undefined)?.["items"] as Array<Record<string, unknown>> | undefined) || [];
+    if (result.success) {
+      logResolution(source, result, "spotify");
+      return result.matchedId;
+    }
+  }
 
-  const candidates = tracks
-    .map((t) => {
-      const name = (t["name"] as string | undefined) || "";
-      const artistsArr = (t["artists"] as Array<Record<string, unknown>> | undefined) || [];
-      const primary = (artistsArr[0]?.["name"] as string | undefined) || "";
-      const uri = t["uri"] as string | undefined;
-      const description = artistsArr
-        .map((a) => (a["name"] as string | undefined) || "")
-        .filter(Boolean)
-        .join(" ");
+  // All queries exhausted, no match found
+  console.warn(`[spotify-search] ✗ FAILED to resolve: "${title}" by "${artist}"`);
+  return null;
+};
 
-      if (!uri) return null;
-      return { id: uri, title: name, artist: primary, description };
-    })
-    .filter((c): c is { id: string; title: string; artist: string; description: string } => !!c);
+/**
+ * Execute a single Spotify search query and score the results.
+ */
+const searchSpotifyWithQuery = async (
+  accessToken: string,
+  source: SourceTrack,
+  query: string
+) => {
+  const encodedQuery = encodeURIComponent(query);
+  const url = `${SEARCH_BASE_URL}?q=${encodedQuery}&type=track&limit=15`;
 
-  return findBestMatch(title, artist, candidates);
+  try {
+    const data = await fetchSpotifyJson(url, accessToken);
+    const tracks = ((data["tracks"] as Record<string, unknown> | undefined)?.["items"] as Array<Record<string, unknown>> | undefined) || [];
+
+    // Convert to CandidateTrack format
+    const candidates = tracks
+      .map((t): CandidateTrack | null => {
+        const name = (t["name"] as string | undefined) || "";
+        const artistsArr = (t["artists"] as Array<Record<string, unknown>> | undefined) || [];
+        const primary = (artistsArr[0]?.["name"] as string | undefined) || "";
+        const uri = t["uri"] as string | undefined;
+        const allArtists = artistsArr
+          .map((a) => (a["name"] as string | undefined) || "")
+          .filter(Boolean)
+          .join(" ");
+
+        if (!uri) return null;
+
+        return {
+          id: uri,
+          title: name,
+          channel: primary,           // Primary artist as "channel"
+          description: allArtists,    // All artists for matching
+        };
+      })
+      .filter((c): c is CandidateTrack => c !== null);
+
+    // Use scoring-based resolution
+    return resolveFromCandidates(source, candidates, query);
+
+  } catch (error) {
+    if (error instanceof SpotifyTokenExpiredError) throw error;
+
+    console.error(`[spotify-search] Search failed for query "${query}":`, error);
+    return {
+      success: false,
+      matchedId: null,
+      matchedTitle: null,
+      matchedChannel: null,
+      score: 0,
+      confidence: "rejected" as const,
+      queryUsed: query,
+      candidatesEvaluated: 0,
+      allScores: [],
+    };
+  }
 };
 
 export const addTracksToSpotifyPlaylist = async (

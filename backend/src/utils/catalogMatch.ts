@@ -1,48 +1,18 @@
-type Tokens = string[];
+/**
+ * Catalog Matching Module
+ * Phase 6: Strict exact matching for Spotify ↔ YouTube Music sync
+ *
+ * Replaces fuzzy token-based matching with deterministic exact matching.
+ * Uses normalization from trackNormalization.ts for all comparisons.
+ */
 
-const TITLE_NOISE = new Set([
-  "from",
-  "original",
-  "motion",
-  "picture",
-  "soundtrack",
-  "official",
-  "audio",
-  "video",
-  "topic",
-  "vevo",
-  "remix",
-  "remastered",
-  "live",
-]);
-
-const ARTIST_NOISE = new Set(["topic", "vevo"]);
-
-const splitTokens = (value: string): Tokens => value.split(/[^a-z0-9]+/g).filter(Boolean);
-
-const filterTokens = (tokens: Tokens, noise: Set<string>): Tokens =>
-  tokens
-    .filter((t) => !noise.has(t))
-    .filter((t) => t.length >= 3);
-
-const stripBracketsAndPunctuation = (value: string): string => {
-  const lower = (value || "").toLowerCase();
-  const noBrackets = lower.replace(/[()\[\]{}<>]/g, " ");
-  return noBrackets.replace(/[^a-z0-9\s]/g, " ");
-};
-
-export const tokenizeTitle = (title: string): Tokens => {
-  const stripped = stripBracketsAndPunctuation(title);
-  const tokens = splitTokens(stripped);
-  return filterTokens(tokens, TITLE_NOISE);
-};
-
-export const tokenizeArtist = (artist: string): Tokens => {
-  const lower = (artist || "").toLowerCase().replace(/\s*-\s*topic$/i, "");
-  const stripped = lower.replace(/[^a-z0-9\s]/g, " ");
-  const tokens = splitTokens(stripped);
-  return filterTokens(tokens, ARTIST_NOISE);
-};
+import {
+  normalizeTrack,
+  tracksMatch,
+  checkMatch,
+  NormalizedTrackData,
+  MatchCheckResult,
+} from "./trackNormalization";
 
 export interface MatchCandidate {
   id: string;
@@ -51,99 +21,145 @@ export interface MatchCandidate {
   description?: string | null;
 }
 
-interface Score {
-  titleScore: number;
-  artistScore: number;
-  finalScore: number;
+export interface MatchResult {
+  id: string;
+  matchedTitle: string;
+  matchedArtist: string;
+  normalizedData: NormalizedTrackData;
 }
 
-const scoreCandidate = (
-  sourceTitleTokens: Tokens,
-  sourceArtistTokens: Tokens,
-  candidate: MatchCandidate
-): Score => {
-  const resultTitleTokens = tokenizeTitle(candidate.title);
-  const resultArtistTokens = tokenizeArtist(candidate.artist || "");
-  const descriptionTokens = tokenizeTitle(candidate.description || "");
+export interface MatchAttempt {
+  candidate: MatchCandidate;
+  normalizedData: NormalizedTrackData;
+  result: MatchCheckResult;
+}
 
-  const titleTokenSet = new Set(resultTitleTokens);
-  const artistTokenSet = new Set([...resultTitleTokens, ...resultArtistTokens, ...descriptionTokens]);
+/**
+ * Find an exact match for a source track among candidates.
+ *
+ * STRICT matching rules:
+ * - normalizedTitle must equal sourceNormalizedTitle
+ * - normalizedArtist must equal sourceNormalizedArtist
+ * - Version keywords must match exactly (both same or both null)
+ *
+ * If multiple candidates qualify, returns the FIRST one (API order).
+ * If no exact match found, returns null.
+ *
+ * @param sourceTitle - Original title from source playlist
+ * @param sourceArtist - Original artist from source playlist
+ * @param candidates - Array of candidates from destination platform search
+ * @returns MatchResult with matched track info, or null if no match
+ */
+export const findExactMatch = (
+  sourceTitle: string,
+  sourceArtist: string,
+  candidates: MatchCandidate[]
+): MatchResult | null => {
+  const sourceNormalized = normalizeTrack(sourceTitle, sourceArtist);
 
-  const titleMatches = sourceTitleTokens.filter((t) => titleTokenSet.has(t)).length;
-  const artistMatches = sourceArtistTokens.filter((t) => artistTokenSet.has(t)).length;
+  console.info("[catalog-match] searching for exact match", {
+    sourceTitle,
+    sourceArtist,
+    sourceNormalized,
+    candidateCount: candidates.length,
+  });
 
-  const titleScore = sourceTitleTokens.length === 0 ? 0 : titleMatches / sourceTitleTokens.length;
-  const artistScore = sourceArtistTokens.length === 0 ? 0 : artistMatches / sourceArtistTokens.length;
-  const finalScore = 0.7 * titleScore + 0.3 * artistScore;
+  const attempts: MatchAttempt[] = [];
 
-  return { titleScore, artistScore, finalScore };
+  for (const candidate of candidates) {
+    const candidateNormalized = normalizeTrack(
+      candidate.title,
+      candidate.artist || ""
+    );
+
+    const matchResult = checkMatch(sourceNormalized, candidateNormalized);
+
+    attempts.push({
+      candidate,
+      normalizedData: candidateNormalized,
+      result: matchResult,
+    });
+
+    if (matchResult === "MATCH") {
+      console.info("[catalog-match] exact match found", {
+        sourceTitle,
+        sourceArtist,
+        matchedId: candidate.id,
+        matchedTitle: candidate.title,
+        matchedArtist: candidate.artist,
+        sourceNormalized,
+        candidateNormalized,
+      });
+
+      return {
+        id: candidate.id,
+        matchedTitle: candidate.title,
+        matchedArtist: candidate.artist || "",
+        normalizedData: candidateNormalized,
+      };
+    }
+  }
+
+  // Log why no match was found
+  const versionMismatches = attempts.filter((a) => a.result === "VERSION_MISMATCH");
+  const noMatches = attempts.filter((a) => a.result === "NO_MATCH");
+
+  console.warn("[catalog-match] no exact match found", {
+    sourceTitle,
+    sourceArtist,
+    sourceNormalized,
+    candidatesEvaluated: candidates.length,
+    versionMismatches: versionMismatches.length,
+    noMatches: noMatches.length,
+    attempts: attempts.map((a) => ({
+      candidateTitle: a.candidate.title,
+      candidateArtist: a.candidate.artist,
+      normalized: a.normalizedData,
+      result: a.result,
+    })),
+  });
+
+  return null;
 };
 
+/**
+ * Legacy function for backward compatibility.
+ * Returns just the ID string instead of full MatchResult.
+ *
+ * @deprecated Use findExactMatch instead for full match information
+ */
 export const findBestMatch = (
   sourceTitle: string,
   sourceArtist: string,
   candidates: MatchCandidate[]
 ): string | null => {
-  const sourceTitleTokens = tokenizeTitle(sourceTitle);
-  const sourceArtistTokens = tokenizeArtist(sourceArtist);
+  const result = findExactMatch(sourceTitle, sourceArtist, candidates);
+  return result?.id || null;
+};
 
-  if (sourceTitleTokens.length < 3) {
-    console.warn("[catalog-match] skip: insufficient title tokens", {
-      sourceTitle,
-      sourceArtist,
-      sourceTitleTokens,
-      sourceArtistTokens,
-    });
-    return null;
-  }
-
-  let best: { id: string; score: Score; candidate: MatchCandidate } | null = null;
+/**
+ * Check if any candidate has a version mismatch with the source.
+ * Used to determine appropriate skip reason (NO_EXACT_MATCH vs METADATA_MISMATCH).
+ *
+ * @returns true if at least one candidate has matching title/artist but different version
+ */
+export const hasVersionMismatch = (
+  sourceTitle: string,
+  sourceArtist: string,
+  candidates: MatchCandidate[]
+): boolean => {
+  const sourceNormalized = normalizeTrack(sourceTitle, sourceArtist);
 
   for (const candidate of candidates) {
-    const score = scoreCandidate(sourceTitleTokens, sourceArtistTokens, candidate);
-    const accepted = score.titleScore >= 0.8 && score.finalScore >= 0.7;
+    const candidateNormalized = normalizeTrack(
+      candidate.title,
+      candidate.artist || ""
+    );
 
-    if (accepted) {
-      if (!best || score.finalScore > best.score.finalScore) {
-        best = { id: candidate.id, score, candidate };
-      }
+    if (checkMatch(sourceNormalized, candidateNormalized) === "VERSION_MISMATCH") {
+      return true;
     }
-
-    console.info("[catalog-match] evaluated", {
-      sourceTitle,
-      sourceArtist,
-      sourceTitleTokens,
-      sourceArtistTokens,
-      candidateTitle: candidate.title,
-      candidateArtist: candidate.artist,
-      titleScore: score.titleScore,
-      artistScore: score.artistScore,
-      finalScore: score.finalScore,
-      accepted,
-    });
   }
 
-  if (!best) {
-    console.warn("[catalog-match] no acceptable match", {
-      sourceTitle,
-      sourceArtist,
-      sourceTitleTokens,
-      sourceArtistTokens,
-    });
-    return null;
-  }
-
-  console.info("[catalog-match] accepted", {
-    sourceTitle,
-    sourceArtist,
-    sourceTitleTokens,
-    sourceArtistTokens,
-    matchedTitle: best.candidate.title,
-    matchedArtist: best.candidate.artist,
-    titleScore: best.score.titleScore,
-    artistScore: best.score.artistScore,
-    finalScore: best.score.finalScore,
-  });
-
-  return best.id;
+  return false;
 };
