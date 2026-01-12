@@ -21,7 +21,8 @@ class TransferBottomSheet extends ConsumerStatefulWidget {
   final String playlistName;
 
   @override
-  ConsumerState<TransferBottomSheet> createState() => _TransferBottomSheetState();
+  ConsumerState<TransferBottomSheet> createState() =>
+      _TransferBottomSheetState();
 }
 
 class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
@@ -31,8 +32,7 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
   bool _isExecuting = false;
   String? _message;
 
-  String? get _token =>
-      ref.read(authControllerProvider).valueOrNull?.token;
+  String? get _token => ref.read(authControllerProvider).valueOrNull?.token;
 
   Future<void> _runPreview() async {
     final token = _token;
@@ -120,12 +120,18 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
             children: [
               Row(
                 children: [
-                  const Icon(Icons.open_in_new_rounded, color: Colors.blueAccent),
+                  const Icon(
+                    Icons.open_in_new_rounded,
+                    color: Colors.blueAccent,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       'Transfer ${widget.playlistName}',
-                      style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ),
                 ],
@@ -136,7 +142,10 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
                 style: TextStyle(color: Colors.grey),
               ),
               const SizedBox(height: 12),
-              const Text('Destination', style: TextStyle(fontWeight: FontWeight.w700)),
+              const Text(
+                'Destination',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
               const SizedBox(height: 8),
               Wrap(
                 spacing: 10,
@@ -198,14 +207,15 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.visibility),
-                    label: Text(_isPreviewing ? 'Previewing...' : 'Preview transfer'),
+                    label: Text(
+                      _isPreviewing ? 'Previewing...' : 'Preview transfer',
+                    ),
                   ),
                   const SizedBox(width: 10),
                   OutlinedButton.icon(
-                    onPressed:
-                        preview == null || _isExecuting || _isPreviewing
-                            ? null
-                            : _runExecute,
+                    onPressed: preview == null || _isExecuting || _isPreviewing
+                        ? null
+                        : _runExecute,
                     icon: _isExecuting
                         ? const SizedBox(
                             width: 16,
@@ -214,7 +224,9 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
                           )
                         : const Icon(Icons.playlist_add_check_rounded),
                     label: Text(
-                      _isExecuting ? 'Creating...' : 'Create on ${_destination == TransferPlatform.spotify ? 'Spotify' : 'YTM'}',
+                      _isExecuting
+                          ? 'Creating...'
+                          : 'Create on ${_destination == TransferPlatform.spotify ? 'Spotify' : 'YTM'}',
                     ),
                   ),
                 ],
@@ -264,21 +276,42 @@ class _PreviewSummary extends StatelessWidget {
           if (preview.toAdd.isNotEmpty) ...[
             const Text('To add', style: TextStyle(fontWeight: FontWeight.w700)),
             const SizedBox(height: 6),
-            ...preview.toAdd.take(5).map(
-              (t) => _PreviewRow(icon: Icons.add, color: Colors.greenAccent, track: t),
-            ),
+            ...preview.toAdd
+                .take(5)
+                .map(
+                  (t) => _PreviewRow(
+                    icon: Icons.add,
+                    color: Colors.greenAccent,
+                    track: t,
+                  ),
+                ),
             if (preview.toAdd.length > 5)
-              Text('and ${preview.toAdd.length - 5} more...', style: const TextStyle(color: Colors.grey)),
+              Text(
+                'and ${preview.toAdd.length - 5} more...',
+                style: const TextStyle(color: Colors.grey),
+              ),
             const SizedBox(height: 8),
           ],
           if (preview.skipped.isNotEmpty) ...[
-            const Text('Skipped', style: TextStyle(fontWeight: FontWeight.w700)),
-            const SizedBox(height: 6),
-            ...preview.skipped.take(5).map(
-              (t) => _PreviewRow(icon: Icons.block, color: Colors.orangeAccent, track: t),
+            const Text(
+              'Skipped',
+              style: TextStyle(fontWeight: FontWeight.w700),
             ),
+            const SizedBox(height: 6),
+            ...preview.skipped
+                .take(5)
+                .map(
+                  (t) => _PreviewRow(
+                    icon: Icons.block,
+                    color: Colors.orangeAccent,
+                    track: t,
+                  ),
+                ),
             if (preview.skipped.length > 5)
-              Text('and ${preview.skipped.length - 5} more...', style: const TextStyle(color: Colors.grey)),
+              Text(
+                'and ${preview.skipped.length - 5} more...',
+                style: const TextStyle(color: Colors.grey),
+              ),
           ],
         ],
       ),
@@ -306,8 +339,10 @@ class _PreviewRow extends StatelessWidget {
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),
           Expanded(
-            child: Text('${track.title} · ${track.artist}',
-                style: const TextStyle(fontWeight: FontWeight.w500)),
+            child: Text(
+              '${track.title} · ${track.artist}',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ),
         ],
       ),

@@ -212,7 +212,8 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
                     ),
                   );
                 },
-                onTransfer: () => _openTransferSheet(playlist.id, playlist.name),
+                onTransfer: () =>
+                    _openTransferSheet(playlist.id, playlist.name),
                 onSync: () => _openSyncTab(playlist.name),
               );
             },
@@ -222,7 +223,10 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     );
   }
 
-  Future<void> _openTransferSheet(String playlistId, String playlistName) async {
+  Future<void> _openTransferSheet(
+    String playlistId,
+    String playlistName,
+  ) async {
     final result = await showModalBottomSheet<TransferExecuteResult>(
       context: context,
       isScrollControlled: true,
@@ -237,16 +241,18 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Transfer complete: added ${result.addedCount}/${result.totalTracks} tracks.'),
+        content: Text(
+          'Transfer complete: added ${result.addedCount}/${result.totalTracks} tracks.',
+        ),
       ),
     );
   }
 
   void _openSyncTab(String playlistName) {
     ref.read(syncControllerProvider.notifier).selectPlaylist(playlistName);
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const SyncTab()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const SyncTab()));
   }
 }
 
@@ -302,7 +308,10 @@ class _PlaylistCard extends StatelessWidget {
                     icon: const Icon(Icons.sync_alt_rounded, size: 18),
                     label: const Text('Sync'),
                     style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 8,
+                      ),
                     ),
                   ),
                   ElevatedButton.icon(
@@ -310,7 +319,10 @@ class _PlaylistCard extends StatelessWidget {
                     icon: const Icon(Icons.open_in_new_rounded, size: 18),
                     label: const Text('Transfer'),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 10,
+                      ),
                     ),
                   ),
                 ],
