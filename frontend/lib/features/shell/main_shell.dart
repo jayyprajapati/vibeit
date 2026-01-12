@@ -8,6 +8,7 @@ import '../auth/auth_controller.dart';
 import '../auth/platform_access_controller.dart';
 import '../../core/models/platform_access.dart';
 import '../platforms/spotify_tab.dart';
+import '../sync/sync_tab.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
@@ -50,6 +51,7 @@ class _MainShellState extends ConsumerState<MainShell> {
     final pages = <Widget>[
       const PlaylistHomeTab(),
       const PlatformsTab(),
+      const SyncTab(),
       const _ProfileTab(),
     ];
 
@@ -59,10 +61,17 @@ class _MainShellState extends ConsumerState<MainShell> {
         currentIndex: _index,
         onTap: (value) => setState(() => _index = value),
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home_filled), label: 'Home'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home_filled),
+            label: 'Dashboard',
+          ),
           BottomNavigationBarItem(
             icon: Icon(Icons.grid_view_rounded),
             label: 'Platforms',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sync_alt_rounded),
+            label: 'Sync',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),

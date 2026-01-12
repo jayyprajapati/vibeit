@@ -14,6 +14,13 @@ const API_BASE_URL = "https://www.googleapis.com/youtube/v3";
 export type YtmScopeLevel = "READ" | "WRITE";
 const YTM_SCOPE_READ = "https://www.googleapis.com/auth/youtube.readonly";
 const YTM_SCOPE_WRITE = "https://www.googleapis.com/auth/youtube.force-ssl";
+const EXCLUDED_PLAYLIST_NAMES = new Set([
+  "liked videos",
+  "watch later",
+  "favorites",
+  "uploads",
+]);
+const MUSIC_KEYWORDS = ["official audio", "lyrics", "song", "album"];
 
 export interface YtmTokenResponse {
   accessToken: string;
@@ -32,6 +39,20 @@ export class YtmTokenExpiredError extends Error {
     super(message);
     this.name = "YtmTokenExpiredError";
   }
+}
+
+interface RawYtmPlaylist {
+  ytmPlaylistId: string;
+  name: string;
+  itemCount: number;
+  channelId: string;
+}
+
+interface PlaylistSampleItem {
+  videoId: string;
+  title: string;
+  ownerChannelTitle: string | null;
+  categoryId: string | null;
 }
 
 const postToTokenEndpoint = async (body: URLSearchParams): Promise<YtmTokenResponse> => {
@@ -114,9 +135,125 @@ export const refreshAccessToken = async (refreshToken: string): Promise<YtmToken
   };
 };
 
+const fetchUserChannelId = async (accessToken: string): Promise<string> => {
+  const url = `${API_BASE_URL}/channels?part=id&mine=true`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+  if (resp.status === 401) throw new YtmTokenExpiredError();
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`YouTube channel lookup failed (${resp.status}): ${text}`);
+  }
+
+  const data = (await resp.json()) as Record<string, unknown>;
+  const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
+  const channelId = items[0]?.["id"] as string | undefined;
+
+  if (!channelId) {
+    throw new Error("Unable to determine YouTube channel id for user");
+  }
+
+  return channelId;
+};
+
+const samplePlaylistItems = async (
+  accessToken: string,
+  playlistId: string,
+  sampleSize = 5
+): Promise<PlaylistSampleItem[]> => {
+  const params = new URLSearchParams({
+    part: "snippet,contentDetails",
+    playlistId,
+    maxResults: sampleSize.toString(),
+  });
+
+  const itemsResp = await fetch(`${API_BASE_URL}/playlistItems?${params.toString()}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+
+  if (itemsResp.status === 401) throw new YtmTokenExpiredError();
+  if (!itemsResp.ok) {
+    const text = await itemsResp.text();
+    throw new Error(`YouTube playlist items sample failed (${itemsResp.status}): ${text}`);
+  }
+
+  const data = (await itemsResp.json()) as Record<string, unknown>;
+  const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
+
+  const samples: PlaylistSampleItem[] = [];
+  const videoIds: string[] = [];
+
+  for (const item of items) {
+    const snippet = item["snippet"] as Record<string, unknown> | undefined;
+    const resource = snippet?.["resourceId"] as Record<string, unknown> | undefined;
+    const videoId = resource?.["videoId"] as string | undefined;
+    if (!videoId) continue;
+
+    const title = (snippet?.["title"] as string | undefined) || "";
+    const ownerChannelTitle = (snippet?.["videoOwnerChannelTitle"] as string | undefined) || null;
+
+    samples.push({ videoId, title, ownerChannelTitle, categoryId: null });
+    videoIds.push(videoId);
+  }
+
+  if (videoIds.length === 0) return samples;
+
+  const videosUrl = `${API_BASE_URL}/videos?part=snippet&id=${videoIds.join(",")}`;
+  const videosResp = await fetch(videosUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+  if (videosResp.status === 401) throw new YtmTokenExpiredError();
+  if (!videosResp.ok) {
+    const text = await videosResp.text();
+    throw new Error(`YouTube videos lookup failed (${videosResp.status}): ${text}`);
+  }
+
+  const videosData = (await videosResp.json()) as Record<string, unknown>;
+  const videos = (videosData["items"] as Array<Record<string, unknown>> | undefined) || [];
+  const categoryById: Record<string, string | null> = {};
+
+  for (const video of videos) {
+    const id = video["id"] as string | undefined;
+    const snippet = video["snippet"] as Record<string, unknown> | undefined;
+    const categoryId = (snippet?.["categoryId"] as string | undefined) || null;
+    if (id) categoryById[id] = categoryId;
+  }
+
+  return samples.map((sample) => ({
+    ...sample,
+    categoryId: categoryById[sample.videoId] ?? null,
+  }));
+};
+
+const isMusicLike = (item: PlaylistSampleItem): boolean => {
+  const title = item.title.toLowerCase();
+  const owner = (item.ownerChannelTitle || "").trim().toLowerCase();
+  const ownerIsTopic = owner.endsWith("- topic");
+  const isMusicCategory = item.categoryId === "10";
+  const hasKeyword = MUSIC_KEYWORDS.some((kw) => title.includes(kw));
+
+  return ownerIsTopic || isMusicCategory || hasKeyword;
+};
+
+const isMusicPlaylist = async (accessToken: string, playlistId: string): Promise<boolean> => {
+  try {
+    const samples = await samplePlaylistItems(accessToken, playlistId, 5);
+    if (samples.length === 0) return false;
+
+    const musicLikeCount = samples.filter(isMusicLike).length;
+    const ratio = musicLikeCount / samples.length;
+    return ratio >= 0.6;
+  } catch (error) {
+    if (error instanceof YtmTokenExpiredError) throw error;
+    console.warn(`[ytm] Music heuristic skipped for ${playlistId}:`, error);
+    return false;
+  }
+};
+
 export const fetchYtmPlaylists = async (accessToken: string): Promise<YtmRemotePlaylist[]> => {
-  const playlists: YtmRemotePlaylist[] = [];
+  const playlists: RawYtmPlaylist[] = [];
   let pageToken: string | null = null;
+
+  const userChannelId = await fetchUserChannelId(accessToken);
 
   while (true) {
     const params = new URLSearchParams({
@@ -151,11 +288,17 @@ export const fetchYtmPlaylists = async (accessToken: string): Promise<YtmRemoteP
       const id = item["id"] as string | undefined;
       const snippet = item["snippet"] as Record<string, unknown> | undefined;
       const title = snippet?.["title"] as string | undefined;
+      const channelId = snippet?.["channelId"] as string | undefined;
       const contentDetails = item["contentDetails"] as Record<string, unknown> | undefined;
       const count = (contentDetails?.["itemCount"] as number | undefined) ?? 0;
 
-      if (id && title) {
-        playlists.push({ ytmPlaylistId: id, name: title, itemCount: count });
+      if (id && title && channelId) {
+        playlists.push({
+          ytmPlaylistId: id,
+          name: title,
+          itemCount: count,
+          channelId,
+        });
       }
     }
 
@@ -163,7 +306,24 @@ export const fetchYtmPlaylists = async (accessToken: string): Promise<YtmRemoteP
     if (!pageToken) break;
   }
 
-  return playlists;
+  const filtered: YtmRemotePlaylist[] = [];
+
+  for (const playlist of playlists) {
+    const normalizedTitle = playlist.name.trim().toLowerCase();
+    if (playlist.channelId !== userChannelId) continue;
+    if (EXCLUDED_PLAYLIST_NAMES.has(normalizedTitle)) continue;
+
+    const looksMusic = await isMusicPlaylist(accessToken, playlist.ytmPlaylistId);
+    if (!looksMusic) continue;
+
+    filtered.push({
+      ytmPlaylistId: playlist.ytmPlaylistId,
+      name: playlist.name,
+      itemCount: playlist.itemCount,
+    });
+  }
+
+  return filtered;
 };
 
 interface YtmPlaylistTrack {
