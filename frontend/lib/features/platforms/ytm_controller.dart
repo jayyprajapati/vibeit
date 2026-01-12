@@ -17,7 +17,8 @@ class YtmState {
     this.message,
     this.isSyncing = false,
     this.isAuthorizing = false,
-  });
+    Set<String>? importingIds,
+  }) : importingIds = importingIds ?? const <String>{};
 
   final bool connected;
   final List<YtmPlaylistSummary> playlists;
@@ -29,6 +30,7 @@ class YtmState {
   final String? message;
   final bool isSyncing;
   final bool isAuthorizing;
+  final Set<String> importingIds;
 
   bool get hasPlaylists => playlists.isNotEmpty;
 
@@ -44,6 +46,7 @@ class YtmState {
     bool? isSyncing,
     bool? isAuthorizing,
     bool clearMessage = false,
+    Set<String>? importingIds,
   }) {
     return YtmState(
       connected: connected ?? this.connected,
@@ -56,6 +59,7 @@ class YtmState {
       message: clearMessage ? null : message ?? this.message,
       isSyncing: isSyncing ?? this.isSyncing,
       isAuthorizing: isAuthorizing ?? this.isAuthorizing,
+      importingIds: importingIds ?? this.importingIds,
     );
   }
 
@@ -69,6 +73,7 @@ class YtmState {
       lastSyncedAt: payload.lastSyncedAt,
       nextScheduledSyncAt: payload.nextScheduledSyncAt,
       message: payload.message,
+      importingIds: <String>{},
     );
   }
 
@@ -80,6 +85,7 @@ class YtmState {
     reauthRequired: false,
     lastSyncedAt: null,
     nextScheduledSyncAt: null,
+    importingIds: <String>{},
   );
 }
 
@@ -164,6 +170,31 @@ class YtmController extends StateNotifier<AsyncValue<YtmState>> {
         message: err.toString(),
       );
       state = AsyncValue.data(next);
+      rethrow;
+    }
+  }
+
+  Future<YtmImportSummary> importPlaylist(String playlistId) async {
+    final token = _requireToken();
+    final current = state.valueOrNull ?? YtmState.initial();
+    final nextImporting = {...current.importingIds, playlistId};
+
+    state = AsyncValue.data(
+      current.copyWith(importingIds: nextImporting, clearMessage: true),
+    );
+
+    try {
+      final summary = await _repo.importPlaylist(token, playlistId);
+      final latest = state.valueOrNull ?? current;
+      final remaining = {...latest.importingIds}..remove(playlistId);
+      state = AsyncValue.data(latest.copyWith(importingIds: remaining));
+      return summary;
+    } catch (err) {
+      final latest = state.valueOrNull ?? current;
+      final remaining = {...latest.importingIds}..remove(playlistId);
+      state = AsyncValue.data(
+        latest.copyWith(importingIds: remaining, message: err.toString()),
+      );
       rethrow;
     }
   }

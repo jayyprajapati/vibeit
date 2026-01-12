@@ -55,6 +55,52 @@ interface PlaylistSampleItem {
   categoryId: string | null;
 }
 
+const parseIsoDurationToSeconds = (iso: string | null | undefined): number | null => {
+  if (!iso) return null;
+
+  const regex = /PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/i;
+  const match = iso.match(regex);
+  if (!match) return null;
+
+  const hours = Number(match[1] || 0);
+  const minutes = Number(match[2] || 0);
+  const seconds = Number(match[3] || 0);
+
+  const totalSeconds = hours * 3600 + minutes * 60 + seconds;
+  return Number.isFinite(totalSeconds) && totalSeconds > 0 ? totalSeconds : null;
+};
+
+const fetchVideoDurations = async (
+  accessToken: string,
+  videoIds: string[]
+): Promise<Record<string, number | null>> => {
+  if (videoIds.length === 0) return {};
+
+  const url = `${API_BASE_URL}/videos?part=contentDetails&id=${videoIds.join(",")}`;
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+
+  if (resp.status === 401) throw new YtmTokenExpiredError();
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`YouTube videos duration lookup failed (${resp.status}): ${text}`);
+  }
+
+  const data = (await resp.json()) as Record<string, unknown>;
+  const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
+
+  const durations: Record<string, number | null> = {};
+  for (const item of items) {
+    const id = item["id"] as string | undefined;
+    const contentDetails = item["contentDetails"] as Record<string, unknown> | undefined;
+    const isoDuration = (contentDetails?.["duration"] as string | undefined) || null;
+    if (id) {
+      durations[id] = parseIsoDurationToSeconds(isoDuration);
+    }
+  }
+
+  return durations;
+};
+
 const postToTokenEndpoint = async (body: URLSearchParams): Promise<YtmTokenResponse> => {
   if (!env.googleClientId || !env.googleClientSecret) {
     throw new Error("Google client credentials are missing");
@@ -331,6 +377,7 @@ interface YtmPlaylistTrack {
   artist: string | null;
   videoId: string;
   playlistItemId: string;
+  durationSeconds: number | null;
 }
 
 export const fetchYtmPlaylistWithTracks = async (
@@ -372,6 +419,9 @@ export const fetchYtmPlaylistWithTracks = async (
     const items = (data["items"] as Array<Record<string, unknown>> | undefined) || [];
     total += items.length;
 
+    const pageTracks: YtmPlaylistTrack[] = [];
+    const videoIds: string[] = [];
+
     for (const item of items) {
       const snippet = item["snippet"] as Record<string, unknown> | undefined;
       const title = (snippet?.["title"] as string | undefined)?.trim() || "";
@@ -380,9 +430,24 @@ export const fetchYtmPlaylistWithTracks = async (
       const playlistItemId = item["id"] as string | undefined;
 
       if (videoId && playlistItemId) {
-        tracks.push({ title, artist, videoId, playlistItemId });
+        pageTracks.push({ title, artist, videoId, playlistItemId, durationSeconds: null });
+        videoIds.push(videoId);
       }
     }
+
+    if (videoIds.length > 0) {
+      try {
+        const durations = await fetchVideoDurations(accessToken, videoIds);
+        for (const track of pageTracks) {
+          track.durationSeconds = durations[track.videoId] ?? null;
+        }
+      } catch (error) {
+        if (error instanceof YtmTokenExpiredError) throw error;
+        console.warn("[ytm] Failed to fetch durations for page", { videoCount: videoIds.length, error });
+      }
+    }
+
+    tracks.push(...pageTracks);
 
     pageToken = (data["nextPageToken"] as string | null | undefined) || null;
   } while (pageToken);
@@ -544,6 +609,37 @@ export const addTracksToYtmPlaylist = async (
       throw new Error(`YouTube add track failed (${resp.status}): ${text}`);
     }
   }
+};
+
+export const createYtmPlaylist = async (accessToken: string, name: string): Promise<string> => {
+  const params = new URLSearchParams({ part: "snippet,status" });
+  const resp = await fetch(`${API_BASE_URL}/playlists?${params.toString()}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      snippet: { title: name },
+      status: { privacyStatus: "private" },
+    }),
+  });
+
+  if (resp.status === 401) throw new YtmTokenExpiredError();
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`YouTube Music playlist create failed (${resp.status}): ${text}`);
+  }
+
+  const data = (await resp.json()) as Record<string, unknown>;
+  const id = (data["id"] as string | undefined) ||
+    ((data["result"] as Record<string, unknown> | undefined)?.["id"] as string | undefined);
+
+  if (!id) {
+    throw new Error("YouTube Music playlist create response missing id");
+  }
+
+  return id;
 };
 
 export const removeTracksFromYtmPlaylist = async (

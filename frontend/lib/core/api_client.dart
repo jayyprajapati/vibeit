@@ -5,6 +5,7 @@ import 'models/playlist.dart';
 import 'models/platform_access.dart';
 import 'models/spotify.dart';
 import 'models/sync.dart';
+import 'models/transfer.dart';
 import 'models/ytm.dart';
 import 'models/user_profile.dart';
 
@@ -186,6 +187,16 @@ class ApiClient {
     return YtmPlaylistsPayload.fromJson(data);
   }
 
+  Future<YtmImportSummary> importYtmPlaylist(
+    String token,
+    String ytmPlaylistId,
+  ) async {
+    final uri = Uri.parse('$baseUrl/ytm/import/$ytmPlaylistId');
+    final resp = await _client.post(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return YtmImportSummary.fromJson(data);
+  }
+
   Future<SpotifyImportSummary> importSpotifyPlaylist(
     String token,
     String spotifyPlaylistId,
@@ -234,6 +245,48 @@ class ApiClient {
 
     final data = _decode(resp);
     return SyncExecuteResult.fromJson(data);
+  }
+
+  Future<TransferPreviewResult> previewTransfer({
+    required String token,
+    required TransferPlatform sourcePlatform,
+    required TransferPlatform destinationPlatform,
+    required String playlistId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/transfer/preview');
+    final resp = await _client.post(
+      uri,
+      headers: _headers(token: token),
+      body: jsonEncode({
+        'sourcePlatform': sourcePlatform.apiValue,
+        'destinationPlatform': destinationPlatform.apiValue,
+        'playlistId': playlistId,
+      }),
+    );
+
+    final data = _decode(resp);
+    return TransferPreviewResult.fromJson(data);
+  }
+
+  Future<TransferExecuteResult> executeTransfer({
+    required String token,
+    required TransferPlatform sourcePlatform,
+    required TransferPlatform destinationPlatform,
+    required String playlistId,
+  }) async {
+    final uri = Uri.parse('$baseUrl/transfer/execute');
+    final resp = await _client.post(
+      uri,
+      headers: _headers(token: token),
+      body: jsonEncode({
+        'sourcePlatform': sourcePlatform.apiValue,
+        'destinationPlatform': destinationPlatform.apiValue,
+        'playlistId': playlistId,
+      }),
+    );
+
+    final data = _decode(resp);
+    return TransferExecuteResult.fromJson(data);
   }
 
   Map<String, String> _headers({String? token}) {

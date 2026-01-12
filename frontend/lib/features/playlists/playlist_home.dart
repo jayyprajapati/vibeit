@@ -3,6 +3,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'playlist_controller.dart';
 import 'playlist_detail_screen.dart';
+import '../../core/models/transfer.dart';
+import '../sync/sync_tab.dart';
+import '../platforms/sync_controller.dart';
+import '../transfer/transfer_sheet.dart';
 
 class PlaylistHomeTab extends ConsumerStatefulWidget {
   const PlaylistHomeTab({super.key});
@@ -208,11 +212,40 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
                     ),
                   );
                 },
+                onTransfer: () => _openTransferSheet(playlist.id, playlist.name),
+                onSync: () => _openSyncTab(playlist.name),
               );
             },
           );
         },
       ),
+    );
+  }
+
+  Future<void> _openTransferSheet(String playlistId, String playlistName) async {
+    final result = await showModalBottomSheet<TransferExecuteResult>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) => TransferBottomSheet(
+        playlistId: playlistId,
+        playlistName: playlistName,
+      ),
+    );
+
+    if (!mounted || result == null) return;
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Transfer complete: added ${result.addedCount}/${result.totalTracks} tracks.'),
+      ),
+    );
+  }
+
+  void _openSyncTab(String playlistName) {
+    ref.read(syncControllerProvider.notifier).selectPlaylist(playlistName);
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SyncTab()),
     );
   }
 }
@@ -222,11 +255,15 @@ class _PlaylistCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.onTap,
+    required this.onTransfer,
+    required this.onSync,
   });
 
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final VoidCallback onTransfer;
+  final VoidCallback onSync;
 
   @override
   Widget build(BuildContext context) {
@@ -257,7 +294,27 @@ class _PlaylistCard extends StatelessWidget {
                   Text(subtitle, style: const TextStyle(color: Colors.grey)),
                 ],
               ),
-              const Icon(Icons.chevron_right, color: Colors.grey),
+              Wrap(
+                spacing: 8,
+                children: [
+                  OutlinedButton.icon(
+                    onPressed: onSync,
+                    icon: const Icon(Icons.sync_alt_rounded, size: 18),
+                    label: const Text('Sync'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: onTransfer,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: const Text('Transfer'),
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),

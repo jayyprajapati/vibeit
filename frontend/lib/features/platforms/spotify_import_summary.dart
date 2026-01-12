@@ -1,11 +1,27 @@
 import 'package:flutter/material.dart';
 
-import '../../core/models/spotify.dart';
+class ImportSkippedTrack {
+  const ImportSkippedTrack({required this.name, required this.reason});
 
-class SpotifyImportSummaryScreen extends StatelessWidget {
-  const SpotifyImportSummaryScreen({super.key, required this.summary});
+  final String name;
+  final String reason;
+}
 
-  final SpotifyImportSummary summary;
+class ImportSummaryScreen extends StatelessWidget {
+  const ImportSummaryScreen({
+    super.key,
+    required this.playlistName,
+    required this.totalTracks,
+    required this.importedCount,
+    required this.skippedCount,
+    required this.skippedTracks,
+  });
+
+  final String playlistName;
+  final int totalTracks;
+  final int importedCount;
+  final int skippedCount;
+  final List<ImportSkippedTrack> skippedTracks;
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +33,7 @@ class SpotifyImportSummaryScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Imported "${summary.playlistName}"',
+              'Imported "$playlistName"',
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 10),
@@ -27,23 +43,23 @@ class SpotifyImportSummaryScreen extends StatelessWidget {
               children: [
                 _MetricCard(
                   label: 'Total tracks',
-                  value: summary.totalTracks.toString(),
+                  value: totalTracks.toString(),
                   color: Colors.blueGrey.shade700,
                 ),
                 _MetricCard(
                   label: 'Imported',
-                  value: summary.importedCount.toString(),
+                  value: importedCount.toString(),
                   color: Colors.green.shade700,
                 ),
                 _MetricCard(
                   label: 'Skipped',
-                  value: summary.skippedCount.toString(),
+                  value: skippedCount.toString(),
                   color: Colors.orange.shade700,
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            if (summary.skippedTracks.isEmpty)
+            if (skippedTracks.isEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
@@ -71,10 +87,10 @@ class SpotifyImportSummaryScreen extends StatelessWidget {
                     const SizedBox(height: 8),
                     Expanded(
                       child: ListView.separated(
-                        itemCount: summary.skippedTracks.length,
+                        itemCount: skippedTracks.length,
                         separatorBuilder: (_, __) => const SizedBox(height: 10),
                         itemBuilder: (context, index) {
-                          final track = summary.skippedTracks[index];
+                          final track = skippedTracks[index];
                           return Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(

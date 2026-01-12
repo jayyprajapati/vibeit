@@ -6,6 +6,7 @@ import searchRoutes from "./routes/searchRoutes";
 import spotifyRoutes from "./routes/spotifyRoutes";
 import ytmRoutes from "./routes/ytmRoutes";
 import syncRoutes from "./routes/syncRoutes";
+import transferRoutes from "./routes/transferRoutes";
 import { authMiddleware } from "./middleware/authMiddleware";
 import { getMe, getPlatformAccess } from "./controllers/authController";
 
@@ -26,6 +27,7 @@ app.use("/search", searchRoutes);
 app.use("/spotify", spotifyRoutes);
 app.use("/ytm", ytmRoutes);
 app.use("/sync", syncRoutes);
+app.use("/transfer", transferRoutes);
 
 // Catch-all for unknown routes so errors flow through the central handler.
 app.use((_: Request, res: Response, next: NextFunction) => {

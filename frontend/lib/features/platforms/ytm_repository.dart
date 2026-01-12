@@ -17,4 +17,8 @@ class YtmRepository {
   Future<YtmPlaylistsPayload> syncNow(String token) {
     return apiClient.syncYtmPlaylists(token);
   }
+
+  Future<YtmImportSummary> importPlaylist(String token, String playlistId) {
+    return apiClient.importYtmPlaylist(token, playlistId);
+  }
 }

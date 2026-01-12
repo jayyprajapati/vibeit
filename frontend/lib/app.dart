@@ -26,7 +26,7 @@ class VibeitApp extends StatelessWidget {
           style: ElevatedButton.styleFrom(
             backgroundColor: green,
             foregroundColor: Colors.black,
-            minimumSize: const Size.fromHeight(48),
+            minimumSize: const Size(88, 48),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),
             ),
@@ -34,7 +34,7 @@ class VibeitApp extends StatelessWidget {
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
+            minimumSize: const Size(88, 48),
             side: const BorderSide(color: Colors.grey),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(12),

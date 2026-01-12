@@ -247,6 +247,42 @@ export const addTracksToSpotifyPlaylist = async (
   }
 };
 
+export const createSpotifyPlaylist = async (
+  accessToken: string,
+  name: string
+): Promise<string> => {
+  const url = `${API_BASE_URL}/me/playlists`;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      name,
+      public: false,
+      description: "Created by VibeIt transfer",
+    }),
+  });
+
+  if (resp.status === 401) {
+    throw new SpotifyTokenExpiredError();
+  }
+
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`Spotify create playlist failed (${resp.status}): ${text}`);
+  }
+
+  const data = (await resp.json()) as Record<string, unknown>;
+  const playlistId = (data["id"] as string | undefined) || null;
+  if (!playlistId) {
+    throw new Error("Spotify create playlist response missing id");
+  }
+
+  return playlistId;
+};
+
 export const removeTracksFromSpotifyPlaylist = async (
   accessToken: string,
   playlistId: string,
