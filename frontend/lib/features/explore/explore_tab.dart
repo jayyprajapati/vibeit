@@ -34,7 +34,9 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
 
     setState(() => _searchResults = const AsyncValue.loading());
     try {
-      final songs = await ref.read(playlistControllerProvider.notifier).searchSongs(trimmed);
+      final songs = await ref
+          .read(playlistControllerProvider.notifier)
+          .searchSongs(trimmed);
       if (!mounted) return;
       setState(() => _searchResults = AsyncValue.data(songs));
     } catch (err, st) {
@@ -106,7 +108,10 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
               children: [
                 Text(
                   'Add "${song.title}"',
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 ListTile(
@@ -116,13 +121,15 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
                     final name = await _promptPlaylistName();
                     if (name == null) return;
                     try {
-                      final playlist = await playlistController.createPlaylist(name);
+                      final playlist = await playlistController.createPlaylist(
+                        name,
+                      );
                       if (context.mounted) Navigator.pop(context, playlist);
                     } catch (err) {
                       if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text(err.toString())),
-                        );
+                        ScaffoldMessenger.of(
+                          context,
+                        ).showSnackBar(SnackBar(content: Text(err.toString())));
                       }
                     }
                   },
@@ -131,7 +138,9 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
                 if (playlists.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('No playlists yet. Create one to add this song.'),
+                    child: Text(
+                      'No playlists yet. Create one to add this song.',
+                    ),
                   )
                 else
                   ...playlists.map(
@@ -170,15 +179,15 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
       );
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Added to ${selected.name}')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Added to ${selected.name}')));
       }
     } catch (err) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(err.toString())),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(err.toString())));
       }
     } finally {
       if (mounted) setState(() => _addingSongId = null);
@@ -255,14 +264,19 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
                   children: [
                     const Text(
                       'Top results',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                     const SizedBox(height: 10),
-                    ...songs.map((song) => _SongResultRow(
-                          song: song,
-                          isAdding: _addingSongId == song.id,
-                          onAdd: () => _addSongToPlaylist(song),
-                        )),
+                    ...songs.map(
+                      (song) => _SongResultRow(
+                        song: song,
+                        isAdding: _addingSongId == song.id,
+                        onAdd: () => _addSongToPlaylist(song),
+                      ),
+                    ),
                   ],
                 );
               },
@@ -278,13 +292,15 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
 
     void addSection(ExploreSection? section) {
       if (section == null || section.songs.isEmpty) return;
-      blocks.add(_SectionBlock(
-        title: section.title,
-        subtitle: section.subtitle,
-        songs: section.songs,
-        addingSongId: _addingSongId,
-        onAdd: _addSongToPlaylist,
-      ));
+      blocks.add(
+        _SectionBlock(
+          title: section.title,
+          subtitle: section.subtitle,
+          songs: section.songs,
+          addingSongId: _addingSongId,
+          onAdd: _addSongToPlaylist,
+        ),
+      );
     }
 
     addSection(payload.popular);
@@ -293,13 +309,16 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
 
     for (final pick in payload.languagePicks) {
       if (pick.songs.isEmpty) continue;
-      blocks.add(_SectionBlock(
-        title: pick.title,
-        subtitle: '${pick.subtitle ?? ''}${pick.confidence > 0 ? ' (confidence ${pick.confidence})' : ''}',
-        songs: pick.songs,
-        addingSongId: _addingSongId,
-        onAdd: _addSongToPlaylist,
-      ));
+      blocks.add(
+        _SectionBlock(
+          title: pick.title,
+          subtitle:
+              '${pick.subtitle ?? ''}${pick.confidence > 0 ? ' (confidence ${pick.confidence})' : ''}',
+          songs: pick.songs,
+          addingSongId: _addingSongId,
+          onAdd: _addSongToPlaylist,
+        ),
+      );
     }
 
     if (blocks.isEmpty) {
@@ -362,7 +381,8 @@ class _ExploreTabState extends ConsumerState<ExploreTab> {
                   height: 42,
                   width: 160,
                   child: ElevatedButton.icon(
-                    onPressed: () => ref.read(exploreControllerProvider.notifier).load(),
+                    onPressed: () =>
+                        ref.read(exploreControllerProvider.notifier).load(),
                     icon: const Icon(Icons.refresh),
                     label: const Text('Retry'),
                   ),
@@ -405,7 +425,10 @@ class _SectionBlock extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 if (subtitle != null)
                   Padding(
@@ -443,7 +466,11 @@ class _SectionBlock extends StatelessWidget {
 }
 
 class _SongCard extends StatelessWidget {
-  const _SongCard({required this.song, required this.onAdd, required this.isAdding});
+  const _SongCard({
+    required this.song,
+    required this.onAdd,
+    required this.isAdding,
+  });
 
   final Song song;
   final VoidCallback onAdd;
@@ -548,14 +575,14 @@ class _SongResultRow extends StatelessWidget {
               children: [
                 Text(
                   song.title,
-                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 4),
                 if (meta.isNotEmpty)
-                  Text(
-                    meta,
-                    style: const TextStyle(color: Colors.grey),
-                  ),
+                  Text(meta, style: const TextStyle(color: Colors.grey)),
               ],
             ),
           ),

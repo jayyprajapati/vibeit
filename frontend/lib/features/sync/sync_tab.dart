@@ -284,12 +284,12 @@ class _SyncPanel extends ConsumerWidget {
           ElevatedButton.icon(
             onPressed:
                 selectedName == null ||
-                        syncState.isPreviewing ||
-                        syncState.isExecuting
-                    ? null
-                    : () async {
-                        await _startSyncFlow(context, ref, selectedName);
-                      },
+                    syncState.isPreviewing ||
+                    syncState.isExecuting
+                ? null
+                : () async {
+                    await _startSyncFlow(context, ref, selectedName);
+                  },
             icon: (syncState.isPreviewing || syncState.isExecuting)
                 ? const SizedBox(
                     width: 16,
@@ -436,9 +436,9 @@ class _SyncPanel extends ConsumerWidget {
           false;
     } catch (err) {
       if (!context.mounted) return false;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err.toString())));
       ref.read(syncControllerProvider.notifier).resetFlow();
       return false;
     }
@@ -446,7 +446,9 @@ class _SyncPanel extends ConsumerWidget {
 
   Future<void> _executeWithSheet(BuildContext context, WidgetRef ref) async {
     try {
-      final outcome = await ref.read(syncControllerProvider.notifier).executeSync();
+      final outcome = await ref
+          .read(syncControllerProvider.notifier)
+          .executeSync();
       final latest = ref.read(syncControllerProvider);
 
       if (!context.mounted) return;
@@ -483,15 +485,15 @@ class _SyncPanel extends ConsumerWidget {
       }
 
       if (outcome.errorMessage != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(outcome.errorMessage!)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(outcome.errorMessage!)));
       }
     } catch (err) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(err.toString())),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(err.toString())));
       ref.read(syncControllerProvider.notifier).resetFlow();
     }
   }

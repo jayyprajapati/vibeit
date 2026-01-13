@@ -5,8 +5,7 @@ import '../../providers.dart';
 import 'explore_repository.dart';
 
 class ExploreController extends StateNotifier<AsyncValue<ExplorePayload>> {
-  ExploreController(this._ref, this._repo)
-    : super(const AsyncValue.loading()) {
+  ExploreController(this._ref, this._repo) : super(const AsyncValue.loading()) {
     load();
   }
 
@@ -18,7 +17,10 @@ class ExploreController extends StateNotifier<AsyncValue<ExplorePayload>> {
   Future<void> load() async {
     final token = _token;
     if (token == null) {
-      state = const AsyncValue.error('Please sign in to explore', StackTrace.empty);
+      state = const AsyncValue.error(
+        'Please sign in to explore',
+        StackTrace.empty,
+      );
       return;
     }
 

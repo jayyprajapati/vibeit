@@ -77,10 +77,11 @@ class ExplorePayload {
               (json['trendingWorldwide'] as Map<String, dynamic>?) ?? {},
             )
           : null,
-      languagePicks: ((json['languagePicks'] as List<dynamic>? ?? <dynamic>[])
-              .cast<Map<String, dynamic>>())
-          .map(LanguagePick.fromJson)
-          .toList(),
+      languagePicks:
+          ((json['languagePicks'] as List<dynamic>? ?? <dynamic>[])
+                  .cast<Map<String, dynamic>>())
+              .map(LanguagePick.fromJson)
+              .toList(),
     );
   }
 }

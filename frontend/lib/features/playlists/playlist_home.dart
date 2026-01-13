@@ -110,18 +110,16 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           );
         }
 
-        final spotifyNames =
-            (spotifyState.valueOrNull?.connected ?? false)
-                ? spotifyState.value!.playlists
-                    .map((p) => _normalizeName(p.name))
-                    .toSet()
-                : <String>{};
-        final ytmNames =
-            (ytmState.valueOrNull?.connected ?? false)
-                ? ytmState.value!.playlists
-                    .map((p) => _normalizeName(p.name))
-                    .toSet()
-                : <String>{};
+        final spotifyNames = (spotifyState.valueOrNull?.connected ?? false)
+            ? spotifyState.value!.playlists
+                  .map((p) => _normalizeName(p.name))
+                  .toSet()
+            : <String>{};
+        final ytmNames = (ytmState.valueOrNull?.connected ?? false)
+            ? ytmState.value!.playlists
+                  .map((p) => _normalizeName(p.name))
+                  .toSet()
+            : <String>{};
 
         return SizedBox(
           height: 184,
