@@ -1,5 +1,6 @@
 import '../../core/api_client.dart';
 import '../../core/models/ytm.dart';
+import 'platform_playlist_models.dart';
 
 class YtmRepository {
   YtmRepository({required this.apiClient});
@@ -20,5 +21,13 @@ class YtmRepository {
 
   Future<YtmImportSummary> importPlaylist(String token, String playlistId) {
     return apiClient.importYtmPlaylist(token, playlistId);
+  }
+
+  Future<PlatformPlaylistDetail> getPlaylistDetail(
+    String token,
+    String playlistId,
+  ) async {
+    final data = await apiClient.getYtmPlaylistDetail(token, playlistId);
+    return PlatformPlaylistDetail.fromJson(data);
   }
 }

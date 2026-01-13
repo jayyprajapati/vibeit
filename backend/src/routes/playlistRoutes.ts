@@ -5,6 +5,7 @@ import {
   createPlaylist,
   getPlaylistById,
   listPlaylists,
+  deletePlaylist,
   removeTrackFromPlaylist,
 } from "../controllers/playlistController";
 
@@ -17,5 +18,6 @@ router.get("/", listPlaylists);
 router.get("/:id", getPlaylistById);
 router.post("/:id/tracks", addTrackToPlaylist);
 router.delete("/:id/tracks/:trackId", removeTrackFromPlaylist);
+router.delete("/:id", deletePlaylist);
 
 export default router;

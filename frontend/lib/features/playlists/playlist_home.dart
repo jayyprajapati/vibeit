@@ -6,6 +6,12 @@ import 'playlist_detail_screen.dart';
 import '../../core/models/playlist.dart';
 import '../../core/models/song.dart';
 import '../../core/models/transfer.dart';
+import '../platforms/platform_playlist_models.dart';
+import '../platforms/platform_playlist_detail_page.dart';
+import '../platforms/spotify_controller.dart';
+import '../platforms/spotify_playlists_page.dart';
+import '../platforms/ytm_controller.dart';
+import '../platforms/ytm_playlists_page.dart';
 import '../sync/sync_tab.dart';
 import '../platforms/sync_controller.dart';
 import '../transfer/transfer_sheet.dart';
@@ -73,6 +79,343 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           ],
         );
       },
+    );
+  }
+
+  Widget _buildSearchCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          TextField(
+            controller: _globalSearchController,
+            decoration: InputDecoration(
+              labelText: 'Global song search',
+              hintText: 'Search millions of tracks via MusicBrainz',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: IconButton(
+                onPressed: () =>
+                    _searchGlobalSongs(_globalSearchController.text),
+                icon: const Icon(Icons.arrow_forward),
+              ),
+            ),
+            textInputAction: TextInputAction.search,
+            onSubmitted: (value) => _searchGlobalSongs(value),
+          ),
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 200),
+            child: _globalResults.when(
+              loading: () => const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: LinearProgressIndicator(minHeight: 4),
+              ),
+              error: (err, _) => Row(
+                children: [
+                  const Icon(Icons.error_outline, color: Colors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Could not search: ${err.toString()}',
+                      style: const TextStyle(color: Colors.orange),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        _searchGlobalSongs(_globalSearchController.text),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+              data: (songs) {
+                if (songs.isEmpty) return const SizedBox.shrink();
+
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Top results',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ...songs.map((song) {
+                      final meta = [
+                        song.primaryArtist,
+                        if (song.album != null) song.album,
+                        if (song.year != null) song.year.toString(),
+                      ].whereType<String>().join(' · ');
+
+                      final isAdding = _addingSongId == song.id;
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 8),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surface,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    song.title,
+                                    style: const TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  if (meta.isNotEmpty)
+                                    Text(
+                                      meta,
+                                      style: const TextStyle(
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                            SizedBox(
+                              height: 38,
+                              child: ElevatedButton(
+                                onPressed: isAdding
+                                    ? null
+                                    : () => _addSongToPlaylist(song),
+                                child: isAdding
+                                    ? const SizedBox(
+                                        width: 16,
+                                        height: 16,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      )
+                                    : const Text('Add'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ],
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildVibeitSection(
+    AsyncValue<List<Playlist>> state,
+    PlaylistController controller,
+  ) {
+    return state.when(
+      loading: () =>
+          const _SectionCard(child: Center(child: CircularProgressIndicator())),
+      error: (err, _) => _SectionCard(
+        child: _InlineError(
+          message: err.toString(),
+          actionLabel: 'Retry',
+          onTap: controller.loadPlaylists,
+        ),
+      ),
+      data: (playlists) {
+        if (playlists.isEmpty) {
+          return _SectionCard(
+            child: _EmptyVibeitState(
+              onCreate: _creating ? null : _createPlaylistFromButton,
+            ),
+          );
+        }
+
+        return SizedBox(
+          height: 184,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            itemBuilder: (context, index) {
+              final playlist = playlists[index];
+              return _VibeitPlaylistCard(
+                playlist: playlist,
+                onOpen: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => PlaylistDetailScreen(
+                        playlistId: playlist.id,
+                        initialName: playlist.name,
+                      ),
+                    ),
+                  );
+                },
+                onTransfer: () =>
+                    _openTransferSheet(playlist.id, playlist.name),
+                onSync: () => _openSyncTab(playlist.name),
+                onDelete: () => _confirmDelete(playlist.id, playlist.name),
+              );
+            },
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemCount: playlists.length,
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildSpotifySection(AsyncValue<SpotifyState> state) {
+    final controller = ref.read(spotifyControllerProvider.notifier);
+
+    return state.when(
+      loading: () =>
+          const _SectionCard(child: Center(child: CircularProgressIndicator())),
+      error: (err, _) => _SectionCard(
+        child: _InlineError(
+          message: err.toString(),
+          actionLabel: 'Retry',
+          onTap: controller.load,
+        ),
+      ),
+      data: (data) {
+        if (!data.connected) {
+          return _SectionCard(
+            child: _ConnectPrompt(
+              label: 'Connect Spotify',
+              description: 'Grant read access to view your playlists here.',
+              onTap: () async {
+                try {
+                  await controller.startConnectFlow();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Finish Spotify login in your browser, then refresh.',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (err) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(err.toString())));
+                  }
+                }
+              },
+            ),
+          );
+        }
+
+        final items = data.playlists
+            .take(3)
+            .map(
+              (p) => PlatformPlaylistSnapshot(
+                id: p.id,
+                name: p.name,
+                itemCount: p.trackCount,
+                lastFetchedAt: p.lastFetchedAt,
+                source: PlatformPlaylistSource.spotify,
+              ),
+            )
+            .toList();
+
+        return _PlatformCarousel(
+          items: items,
+          source: PlatformPlaylistSource.spotify,
+          onShowMore: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SpotifyPlaylistsPage()),
+          ),
+          onOpen: _openPlatformPlaylist,
+          emptyLabel: 'No playlists yet. Sync from Spotify to bring them in.',
+        );
+      },
+    );
+  }
+
+  Widget _buildYtmSection(AsyncValue<YtmState> state) {
+    final controller = ref.read(ytmControllerProvider.notifier);
+
+    return state.when(
+      loading: () =>
+          const _SectionCard(child: Center(child: CircularProgressIndicator())),
+      error: (err, _) => _SectionCard(
+        child: _InlineError(
+          message: err.toString(),
+          actionLabel: 'Retry',
+          onTap: controller.load,
+        ),
+      ),
+      data: (data) {
+        if (!data.connected) {
+          return _SectionCard(
+            child: _ConnectPrompt(
+              label: 'Connect YouTube Music',
+              description:
+                  'Grant read access to browse YouTube Music playlists.',
+              onTap: () async {
+                try {
+                  await controller.startConnectFlow();
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Finish YouTube Music login, then refresh here.',
+                        ),
+                      ),
+                    );
+                  }
+                } catch (err) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(
+                      context,
+                    ).showSnackBar(SnackBar(content: Text(err.toString())));
+                  }
+                }
+              },
+            ),
+          );
+        }
+
+        final items = data.playlists
+            .take(3)
+            .map(
+              (p) => PlatformPlaylistSnapshot(
+                id: p.id,
+                name: p.name,
+                itemCount: p.itemCount,
+                lastFetchedAt: p.lastFetchedAt,
+                source: PlatformPlaylistSource.ytm,
+              ),
+            )
+            .toList();
+
+        return _PlatformCarousel(
+          items: items,
+          source: PlatformPlaylistSource.ytm,
+          onShowMore: () => Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const YtmPlaylistsPage())),
+          onOpen: _openPlatformPlaylist,
+          emptyLabel: 'No playlists yet. Sync from YouTube Music to see them.',
+        );
+      },
+    );
+  }
+
+  void _openPlatformPlaylist(PlatformPlaylistSnapshot playlist) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => PlatformPlaylistDetailPage(playlist: playlist),
+      ),
     );
   }
 
@@ -222,264 +565,51 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
   @override
   Widget build(BuildContext context) {
     final playlistsState = ref.watch(playlistControllerProvider);
-    final controller = ref.read(playlistControllerProvider.notifier);
+    final spotifyState = ref.watch(spotifyControllerProvider);
+    final ytmState = ref.watch(ytmControllerProvider);
+    final playlistController = ref.read(playlistControllerProvider.notifier);
 
-    Widget header() {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
-        child: Row(
-          mainAxisSize: MainAxisSize.max,
-          children: [
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Playlists',
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-                  ),
-                  SizedBox(height: 6),
-                  Text(
-                    'Build and manage your own mixes without external platforms.',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              fit: FlexFit.loose,
-              child: SizedBox(
-                height: 40,
-                child: ElevatedButton.icon(
-                  onPressed: _creating ? null : _createPlaylistFromButton,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Create'),
-                ),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget searchCard() {
-      return Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            TextField(
-              controller: _globalSearchController,
-              decoration: InputDecoration(
-                labelText: 'Global song search',
-                hintText: 'Search millions of tracks via MusicBrainz',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  onPressed: () =>
-                      _searchGlobalSongs(_globalSearchController.text),
-                  icon: const Icon(Icons.arrow_forward),
-                ),
-              ),
-              textInputAction: TextInputAction.search,
-              onSubmitted: (value) => _searchGlobalSongs(value),
-            ),
-            const SizedBox(height: 12),
-            AnimatedSwitcher(
-              duration: const Duration(milliseconds: 200),
-              child: _globalResults.when(
-                loading: () => const Padding(
-                  padding: EdgeInsets.symmetric(vertical: 12),
-                  child: LinearProgressIndicator(minHeight: 4),
-                ),
-                error: (err, _) => Row(
-                  children: [
-                    const Icon(Icons.error_outline, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Could not search: ${err.toString()}',
-                        style: const TextStyle(color: Colors.orange),
-                      ),
-                    ),
-                    TextButton(
-                      onPressed: () =>
-                          _searchGlobalSongs(_globalSearchController.text),
-                      child: const Text('Retry'),
-                    ),
-                  ],
-                ),
-                data: (songs) {
-                  if (songs.isEmpty) {
-                    return const SizedBox.shrink();
-                  }
-                  return Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Top results',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      ...songs.map((song) {
-                        final meta = [
-                          song.primaryArtist,
-                          if (song.album != null) song.album,
-                          if (song.year != null) song.year.toString(),
-                        ].whereType<String>().join(' · ');
-
-                        final isAdding = _addingSongId == song.id;
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      song.title,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    if (meta.isNotEmpty)
-                                      Text(
-                                        meta,
-                                        style: const TextStyle(
-                                          color: Colors.grey,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                              SizedBox(
-                                height: 38,
-                                child: ElevatedButton(
-                                  onPressed: isAdding
-                                      ? null
-                                      : () => _addSongToPlaylist(song),
-                                  child: isAdding
-                                      ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                          ),
-                                        )
-                                      : const Text('Add'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                  );
-                },
-              ),
-            ),
-          ],
-        ),
-      );
+    Future<void> refreshAll() async {
+      await Future.wait([
+        playlistController.loadPlaylists(),
+        ref.read(spotifyControllerProvider.notifier).load(),
+        ref.read(ytmControllerProvider.notifier).load(),
+      ]);
     }
 
     return RefreshIndicator(
-      onRefresh: controller.loadPlaylists,
-      child: playlistsState.when(
-        loading: () => ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            header(),
-            const SizedBox(height: 120),
-            const Center(child: CircularProgressIndicator()),
-          ],
-        ),
-        error: (err, _) => ListView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          children: [
-            header(),
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: _ErrorState(
-                message: err.toString(),
-                onRetry: controller.loadPlaylists,
-              ),
-            ),
-          ],
-        ),
-        data: (playlists) {
-          final children = <Widget>[header(), searchCard()];
-
-          if (playlists.isEmpty) {
-            children.add(
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 24,
-                  vertical: 12,
-                ),
-                child: _EmptyState(
-                  onCreate: _creating ? null : _createPlaylistFromButton,
-                ),
-              ),
-            );
-          } else {
-            children.add(
-              const Padding(
-                padding: EdgeInsets.fromLTRB(24, 12, 24, 4),
-                child: Text(
-                  'Your playlists',
-                  style: TextStyle(fontWeight: FontWeight.w700),
-                ),
-              ),
-            );
-
-            for (final playlist in playlists) {
-              children.add(
-                Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 24,
-                    vertical: 6,
-                  ),
-                  child: _PlaylistCard(
-                    title: playlist.name,
-                    subtitle:
-                        '${playlist.tracks.length} tracks · Updated ${playlist.updatedAt.toLocal().toString().split(' ').first}',
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => PlaylistDetailScreen(
-                            playlistId: playlist.id,
-                            initialName: playlist.name,
-                          ),
-                        ),
-                      );
-                    },
-                    onTransfer: () =>
-                        _openTransferSheet(playlist.id, playlist.name),
-                    onSync: () => _openSyncTab(playlist.name),
-                  ),
-                ),
-              );
-            }
-          }
-
-          return ListView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.only(bottom: 24),
-            children: children,
-          );
-        },
+      onRefresh: refreshAll,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
+        children: [
+          _DashboardHeader(
+            onCreate: _creating ? null : _createPlaylistFromButton,
+          ),
+          const SizedBox(height: 16),
+          _buildSearchCard(),
+          const SizedBox(height: 24),
+          const _SectionHeading(
+            title: 'Vibeit playlists',
+            subtitle: 'Keep building your own mixes.',
+          ),
+          const SizedBox(height: 10),
+          _buildVibeitSection(playlistsState, playlistController),
+          const SizedBox(height: 26),
+          const _SectionHeading(
+            title: 'Spotify playlists',
+            subtitle: 'Browse without switching apps.',
+          ),
+          const SizedBox(height: 10),
+          _buildSpotifySection(spotifyState),
+          const SizedBox(height: 26),
+          const _SectionHeading(
+            title: 'YouTube Music playlists',
+            subtitle: 'Stay close to your YTM library.',
+          ),
+          const SizedBox(height: 10),
+          _buildYtmSection(ytmState),
+        ],
       ),
     );
   }
@@ -515,79 +645,451 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
       context,
     ).push(MaterialPageRoute(builder: (_) => const SyncTab()));
   }
+
+  Future<void> _confirmDelete(String playlistId, String name) async {
+    final shouldDelete = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Delete playlist'),
+          content: Text('Remove "$name" from Vibeit? This cannot be undone.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Delete'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (shouldDelete != true || !mounted) return;
+
+    try {
+      await ref
+          .read(playlistControllerProvider.notifier)
+          .deletePlaylist(playlistId);
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Playlist deleted')));
+      }
+    } catch (err) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(err.toString())));
+      }
+    }
+  }
 }
 
-class _PlaylistCard extends StatelessWidget {
-  const _PlaylistCard({
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    required this.onTransfer,
-    required this.onSync,
-  });
+class _DashboardHeader extends StatelessWidget {
+  const _DashboardHeader({required this.onCreate});
+
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Dashboard',
+                style: TextStyle(fontSize: 26, fontWeight: FontWeight.w700),
+              ),
+              SizedBox(height: 6),
+              Text(
+                'Playlists plus connected libraries in one place.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton.icon(
+          onPressed: onCreate,
+          icon: const Icon(Icons.add),
+          label: const Text('Create playlist'),
+          style: ElevatedButton.styleFrom(minimumSize: const Size(0, 42)),
+        ),
+      ],
+    );
+  }
+}
+
+class _SectionHeading extends StatelessWidget {
+  const _SectionHeading({required this.title, required this.subtitle});
 
   final String title;
   final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 4),
+        Text(subtitle, style: const TextStyle(color: Colors.grey)),
+      ],
+    );
+  }
+}
+
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: child,
+    );
+  }
+}
+
+class _InlineError extends StatelessWidget {
+  const _InlineError({
+    required this.message,
+    required this.actionLabel,
+    required this.onTap,
+  });
+
+  final String message;
+  final String actionLabel;
   final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Icon(Icons.error_outline, color: Colors.orange),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(message, style: const TextStyle(color: Colors.orange)),
+              const SizedBox(height: 6),
+              TextButton(onPressed: onTap, child: Text(actionLabel)),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _EmptyVibeitState extends StatelessWidget {
+  const _EmptyVibeitState({required this.onCreate});
+
+  final VoidCallback? onCreate;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.library_music_outlined, size: 40, color: Colors.grey),
+        const SizedBox(width: 14),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'Create your first playlist',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              SizedBox(height: 4),
+              Text(
+                'Build a mix and start adding tracks.',
+                style: TextStyle(color: Colors.grey),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        ElevatedButton.icon(
+          onPressed: onCreate,
+          icon: const Icon(Icons.add),
+          label: const Text('Create'),
+        ),
+      ],
+    );
+  }
+}
+
+class _VibeitPlaylistCard extends StatelessWidget {
+  const _VibeitPlaylistCard({
+    required this.playlist,
+    required this.onOpen,
+    required this.onTransfer,
+    required this.onSync,
+    required this.onDelete,
+  });
+
+  final Playlist playlist;
+  final VoidCallback onOpen;
   final VoidCallback onTransfer;
   final VoidCallback onSync;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final updated = playlist.updatedAt.toLocal().toString().split(' ').first;
+    return InkWell(
+      onTap: onOpen,
+      borderRadius: BorderRadius.circular(14),
+      child: Ink(
+        width: 240,
+        decoration: BoxDecoration(
+          color: Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(14),
+        ),
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              playlist.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              '${playlist.tracks.length} tracks · Updated $updated',
+              style: const TextStyle(color: Colors.grey),
+            ),
+            const Spacer(),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: onSync,
+                  icon: const Icon(Icons.sync_alt_rounded, size: 18),
+                  label: const Text('Sync'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size(0, 38),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  onPressed: onTransfer,
+                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                  label: const Text('Transfer'),
+                  style: ElevatedButton.styleFrom(
+                    minimumSize: const Size(0, 38),
+                  ),
+                ),
+                IconButton(
+                  onPressed: onDelete,
+                  icon: const Icon(
+                    Icons.delete_outline,
+                    color: Colors.redAccent,
+                  ),
+                  tooltip: 'Delete playlist',
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PlatformCarousel extends StatelessWidget {
+  const _PlatformCarousel({
+    required this.items,
+    required this.source,
+    required this.onShowMore,
+    required this.onOpen,
+    required this.emptyLabel,
+  });
+
+  final List<PlatformPlaylistSnapshot> items;
+  final PlatformPlaylistSource source;
+  final VoidCallback onShowMore;
+  final ValueChanged<PlatformPlaylistSnapshot> onOpen;
+  final String emptyLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    if (items.isEmpty) {
+      return _SectionCard(
+        child: Row(
+          children: [
+            Icon(Icons.queue_music, color: source.accentColor),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                emptyLabel,
+                style: const TextStyle(color: Colors.grey),
+              ),
+            ),
+            TextButton(onPressed: onShowMore, child: const Text('Show more')),
+          ],
+        ),
+      );
+    }
+
+    return SizedBox(
+      height: 170,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 2),
+        itemBuilder: (context, index) {
+          if (index == items.length) {
+            return _ShowMoreCard(onTap: onShowMore);
+          }
+
+          final playlist = items[index];
+          return _PlatformPlaylistCard(
+            playlist: playlist,
+            onTap: () => onOpen(playlist),
+          );
+        },
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemCount: items.length + 1,
+      ),
+    );
+  }
+}
+
+class _PlatformPlaylistCard extends StatelessWidget {
+  const _PlatformPlaylistCard({required this.playlist, required this.onTap});
+
+  final PlatformPlaylistSnapshot playlist;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = playlist.source.gradient;
+    final itemLabel = playlist.source == PlatformPlaylistSource.ytm
+        ? 'items'
+        : 'tracks';
+    final updated = playlist.lastFetchedAt
+        .toLocal()
+        .toString()
+        .split(' ')
+        .first;
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 220,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: gradient,
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  playlist.source == PlatformPlaylistSource.spotify
+                      ? Icons.music_note
+                      : Icons.play_circle_fill,
+                  color: Colors.black,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    playlist.source.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              playlist.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w800,
+                color: Colors.black,
+              ),
+            ),
+            const Spacer(),
+            Text(
+              '${playlist.itemCount} $itemLabel',
+              style: const TextStyle(
+                color: Colors.black87,
+                fontWeight: FontWeight.w600,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Updated $updated',
+              style: const TextStyle(color: Colors.black87),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ShowMoreCard extends StatelessWidget {
+  const _ShowMoreCard({required this.onTap});
+
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(14),
       child: Ink(
+        width: 160,
         decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(12),
+          color: Theme.of(context).cardColor.withValues(alpha: 0.35),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: Colors.grey.shade700),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        child: const Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(subtitle, style: const TextStyle(color: Colors.grey)),
-                ],
-              ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  OutlinedButton.icon(
-                    onPressed: onSync,
-                    icon: const Icon(Icons.sync_alt_rounded, size: 18),
-                    label: const Text('Sync'),
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 8,
-                      ),
-                    ),
-                  ),
-                  ElevatedButton.icon(
-                    onPressed: onTransfer,
-                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                    label: const Text('Transfer'),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 10,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              Icon(Icons.arrow_forward, color: Colors.grey),
+              SizedBox(height: 6),
+              Text('Show more'),
             ],
           ),
         ),
@@ -596,76 +1098,37 @@ class _PlaylistCard extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState({required this.onCreate});
+class _ConnectPrompt extends StatelessWidget {
+  const _ConnectPrompt({
+    required this.label,
+    required this.description,
+    required this.onTap,
+  });
 
-  final VoidCallback? onCreate;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(
-            Icons.library_music_outlined,
-            size: 64,
-            color: Colors.grey,
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'No playlists yet',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Create your first playlist to start adding tracks.',
-            style: TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: onCreate,
-            icon: const Icon(Icons.add),
-            label: const Text('Create playlist'),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.orange),
-          const SizedBox(height: 10),
-          Text(
-            'Could not load playlists',
-            style: Theme.of(context).textTheme.titleMedium,
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        const Icon(Icons.link_rounded, color: Colors.grey),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 4),
+              Text(description, style: const TextStyle(color: Colors.grey)),
+            ],
           ),
-          const SizedBox(height: 6),
-          Text(
-            message,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.grey),
-          ),
-          const SizedBox(height: 16),
-          ElevatedButton.icon(
-            onPressed: onRetry,
-            icon: const Icon(Icons.refresh),
-            label: const Text('Retry'),
-          ),
-        ],
-      ),
+        ),
+        const SizedBox(width: 12),
+        ElevatedButton(onPressed: onTap, child: const Text('Grant access')),
+      ],
     );
   }
 }

@@ -55,6 +55,14 @@ const serializePlaylist = (playlist: ISpotifyPlaylist) => ({
   lastFetchedAt: playlist.lastFetchedAt,
 });
 
+const serializePlaylistDetail = (playlist: ISpotifyPlaylist) => ({
+  id: playlist.spotifyPlaylistId,
+  name: playlist.name,
+  trackCount: playlist.trackCount,
+  lastFetchedAt: playlist.lastFetchedAt,
+  tracks: playlist.tracks,
+});
+
 const decodeState = (state: string): SpotifyStatePayload | null => {
   try {
     const payload = jwt.verify(state, env.jwtSecret, { subject: "spotify-auth" }) as SpotifyStatePayload;
@@ -314,6 +322,63 @@ export const syncSpotifyNow = async (req: Request, res: Response, next: NextFunc
     const response = await fetchAndCachePlaylists(userId, true);
     return res.json(response);
   } catch (error) {
+    return next(error);
+  }
+};
+
+export const getSpotifyPlaylistDetail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    const playlistId = (req.params.spotifyPlaylistId || "").trim();
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!playlistId) {
+      return res.status(400).json({ error: "Spotify playlist id is required" });
+    }
+
+    const playlist = await SpotifyPlaylist.findOne({
+      userId,
+      spotifyPlaylistId: playlistId,
+    });
+
+    if (!playlist) {
+      return res.status(404).json({ error: "Playlist not found" });
+    }
+
+    const lastFetchedMs = playlist.lastFetchedAt?.getTime?.() ?? 0;
+    const freshEnough = playlist.tracks.length > 0 && Date.now() - lastFetchedMs < CACHE_TTL_MS;
+
+    if (freshEnough) {
+      return res.json({ ...serializePlaylistDetail(playlist), fromCache: true });
+    }
+
+    const accessToken = await ensureAccessToken(userId);
+    const remote = await fetchSpotifyPlaylistWithTracks(accessToken, playlistId);
+
+    const mappedTracks = remote.tracks.map((track) => ({
+      name: track.title || "Unknown track",
+      artist: track.artists.join(", ") || "Unknown artist",
+    }));
+
+    playlist.name = remote.name;
+    playlist.trackCount = remote.total || remote.tracks.length;
+    playlist.tracks = mappedTracks;
+    playlist.lastFetchedAt = new Date();
+    await playlist.save();
+
+    return res.json({ ...serializePlaylistDetail(playlist), fromCache: false });
+  } catch (error) {
+    if (error instanceof ReauthRequiredError) {
+      return res.status(401).json({ error: error.message });
+    }
+
+    if (error instanceof SpotifyTokenExpiredError) {
+      return res.status(401).json({ error: "Spotify access token expired. Please reconnect." });
+    }
+
     return next(error);
   }
 };

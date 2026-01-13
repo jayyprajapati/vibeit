@@ -1,5 +1,6 @@
 import '../../core/api_client.dart';
 import '../../core/models/spotify.dart';
+import 'platform_playlist_models.dart';
 
 class SpotifyRepository {
   SpotifyRepository({required this.apiClient});
@@ -20,5 +21,13 @@ class SpotifyRepository {
 
   Future<SpotifyImportSummary> importPlaylist(String token, String playlistId) {
     return apiClient.importSpotifyPlaylist(token, playlistId);
+  }
+
+  Future<PlatformPlaylistDetail> getPlaylistDetail(
+    String token,
+    String playlistId,
+  ) async {
+    final data = await apiClient.getSpotifyPlaylistDetail(token, playlistId);
+    return PlatformPlaylistDetail.fromJson(data);
   }
 }

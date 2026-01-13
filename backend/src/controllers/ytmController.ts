@@ -66,6 +66,14 @@ const serializePlaylist = (playlist: IYtmPlaylist) => ({
   lastFetchedAt: playlist.lastFetchedAt,
 });
 
+const serializePlaylistDetail = (playlist: IYtmPlaylist) => ({
+  id: playlist.ytmPlaylistId,
+  name: playlist.name,
+  itemCount: playlist.itemCount,
+  lastFetchedAt: playlist.lastFetchedAt,
+  tracks: playlist.tracks,
+});
+
 const decodeState = (state: string): YtmStatePayload | null => {
   try {
     const payload = jwt.verify(state, env.jwtSecret, { subject: "ytm-auth" }) as YtmStatePayload;
@@ -350,6 +358,67 @@ export const syncYtmNow = async (req: Request, res: Response, next: NextFunction
     if (error instanceof UsageLimitError) {
       return res.status(error.statusCode).json({ error: error.message });
     }
+    return next(error);
+  }
+};
+
+export const getYtmPlaylistDetail = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    const playlistId = (req.params.ytmPlaylistId || "").trim();
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!playlistId) {
+      return res.status(400).json({ error: "YouTube Music playlist id is required" });
+    }
+
+    await incrementUsageOrThrow(userId);
+
+    const playlist = await YtmPlaylist.findOne({ userId, ytmPlaylistId: playlistId });
+    if (!playlist) {
+      return res.status(404).json({ error: "Playlist not found" });
+    }
+
+    const lastFetchedMs = playlist.lastFetchedAt?.getTime?.() ?? 0;
+    const freshEnough = playlist.tracks && playlist.tracks.length > 0 && Date.now() - lastFetchedMs < CACHE_TTL_MS;
+
+    if (freshEnough) {
+      return res.json({ ...serializePlaylistDetail(playlist), fromCache: true });
+    }
+
+    const accessToken = await ensureAccessToken(userId);
+    const remote = await fetchYtmPlaylistWithTracks(accessToken, playlistId);
+
+    const mappedTracks = remote.tracks.map((track) => ({
+      title: track.title || "Unknown title",
+      artist: track.artist || "Unknown artist",
+      durationSeconds: track.durationSeconds ?? null,
+      videoId: track.videoId ?? null,
+    }));
+
+    playlist.name = remote.name || playlist.name;
+    playlist.itemCount = remote.total || remote.tracks.length;
+    playlist.tracks = mappedTracks;
+    playlist.lastFetchedAt = new Date();
+    await playlist.save();
+
+    return res.json({ ...serializePlaylistDetail(playlist), fromCache: false });
+  } catch (error) {
+    if (error instanceof UsageLimitError) {
+      return res.status(error.statusCode).json({ error: error.message });
+    }
+
+    if (error instanceof ReauthRequiredError) {
+      return res.status(401).json({ error: error.message });
+    }
+
+    if (error instanceof YtmTokenExpiredError) {
+      return res.status(401).json({ error: "YouTube Music access token expired. Please reconnect." });
+    }
+
     return next(error);
   }
 };

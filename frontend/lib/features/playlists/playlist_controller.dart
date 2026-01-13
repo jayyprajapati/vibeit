@@ -69,6 +69,20 @@ class PlaylistController extends StateNotifier<AsyncValue<List<Playlist>>> {
     return updated;
   }
 
+  Future<void> deletePlaylist(String playlistId) async {
+    final token = _requireToken();
+    final previous = state.valueOrNull ?? <Playlist>[];
+    final next = previous.where((p) => p.id != playlistId).toList();
+    state = AsyncValue.data(next);
+
+    try {
+      await _repo.deletePlaylist(token, playlistId);
+    } catch (err) {
+      state = AsyncValue.data(previous);
+      rethrow;
+    }
+  }
+
   Future<Playlist> removeTrack(String playlistId, String trackId) async {
     final token = _requireToken();
     final updated = await _repo.removeTrack(token, playlistId, trackId);

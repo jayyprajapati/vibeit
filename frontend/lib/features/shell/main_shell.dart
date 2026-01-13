@@ -7,7 +7,6 @@ import '../playlists/playlist_home.dart';
 import '../auth/auth_controller.dart';
 import '../auth/platform_access_controller.dart';
 import '../../core/models/platform_access.dart';
-import '../platforms/spotify_tab.dart';
 import '../sync/sync_tab.dart';
 
 class MainShell extends ConsumerStatefulWidget {
@@ -50,7 +49,6 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       const PlaylistHomeTab(),
-      const PlatformsTab(),
       const SyncTab(),
       const _ProfileTab(),
     ];
@@ -64,10 +62,6 @@ class _MainShellState extends ConsumerState<MainShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.home_filled),
             label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: 'Platforms',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.sync_alt_rounded),
@@ -96,51 +90,16 @@ class _ProfileTab extends ConsumerWidget {
 
     return state.when(
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (err, _) => Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Profile',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 12),
-            Text('Could not load profile: $err'),
-            const SizedBox(height: 12),
-            ElevatedButton(
-              onPressed: () =>
-                  ref.read(authControllerProvider.notifier).refreshProfile(),
-              child: const Text('Retry'),
-            ),
-          ],
-        ),
-      ),
+      error: (err, _) => _ProfileError(message: err.toString()),
       data: (auth) {
         if (!auth.isAuthenticated) {
-          return Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Profile',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 12),
-                const Text('You are signed out.'),
-                const SizedBox(height: 12),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.of(context).pushAndRemoveUntil(
-                      MaterialPageRoute(builder: (_) => const EmailScreen()),
-                      (route) => false,
-                    );
-                  },
-                  child: const Text('Go to login'),
-                ),
-              ],
-            ),
+          return _SignedOutView(
+            onLogin: () {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const EmailScreen()),
+                (route) => false,
+              );
+            },
           );
         }
 
@@ -150,286 +109,115 @@ class _ProfileTab extends ConsumerWidget {
             accessController.load();
           });
         }
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Profile',
-                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
-              _ProfileRow(label: 'Email', value: profile.email),
-              _ProfileRow(
-                label: 'Daily limit',
-                value: profile.dailyUsageLimit.toString(),
-              ),
-              _ProfileRow(
-                label: 'Usage today',
-                value: profile.usageToday.toString(),
-              ),
-              _ProfileRow(
-                label: 'Joined',
-                value: profile.createdAt.toLocal().toString().split(' ').first,
-              ),
-              const SizedBox(height: 24),
-              _AccessCard(
-                state: accessState,
-                onRefresh: accessController.load,
-                onRequestSpotifyRead: () => accessController.requestAuth(
-                  PlatformKind.spotify,
-                  ScopeLevel.read,
+
+        return Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Profile',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _ProfileValueRow(label: 'Email', value: profile.email),
+                    _ProfileValueRow(
+                      label: 'Daily limit',
+                      value: profile.dailyUsageLimit.toString(),
+                    ),
+                    _ProfileValueRow(
+                      label: 'Usage today',
+                      value: profile.usageToday.toString(),
+                    ),
+                    _ProfileValueRow(
+                      label: 'Joined',
+                      value: profile.createdAt
+                          .toLocal()
+                          .toString()
+                          .split(' ')
+                          .first,
+                    ),
+                    const SizedBox(height: 24),
+                    const Text(
+                      'Platform access',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    if (accessState.message != null)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _InlineMessage(message: accessState.message!),
+                      ),
+                    _AccessListRow(
+                      label: 'Spotify',
+                      entry: accessState.access?.spotify,
+                      isLoading:
+                          accessState.isLoading || accessState.isLaunching,
+                      onGrantRead: () => accessController.requestAuth(
+                        PlatformKind.spotify,
+                        ScopeLevel.read,
+                      ),
+                      onGrantWrite: () => accessController.requestAuth(
+                        PlatformKind.spotify,
+                        ScopeLevel.write,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _AccessListRow(
+                      label: 'YouTube Music',
+                      entry: accessState.access?.ytm,
+                      isLoading:
+                          accessState.isLoading || accessState.isLaunching,
+                      onGrantRead: () => accessController.requestAuth(
+                        PlatformKind.ytm,
+                        ScopeLevel.read,
+                      ),
+                      onGrantWrite: () => accessController.requestAuth(
+                        PlatformKind.ytm,
+                        ScopeLevel.write,
+                      ),
+                    ),
+                  ],
                 ),
-                onRequestSpotifyWrite: () => accessController.requestAuth(
-                  PlatformKind.spotify,
-                  ScopeLevel.write,
-                ),
-                onRequestYtmRead: () => accessController.requestAuth(
-                  PlatformKind.ytm,
-                  ScopeLevel.read,
-                ),
-                onRequestYtmWrite: () => accessController.requestAuth(
-                  PlatformKind.ytm,
-                  ScopeLevel.write,
-                ),
               ),
-              const SizedBox(height: 20),
-              Wrap(
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  ElevatedButton.icon(
-                    onPressed: () => ref
-                        .read(authControllerProvider.notifier)
-                        .refreshProfile(),
-                    icon: const Icon(Icons.refresh),
-                    label: const Text('Refresh profile'),
+            ),
+            SafeArea(
+              top: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
+                child: ElevatedButton(
+                  onPressed: () =>
+                      ref.read(authControllerProvider.notifier).logout(),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.red.shade600,
+                    foregroundColor: Colors.white,
+                    minimumSize: const Size.fromHeight(52),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                  OutlinedButton.icon(
-                    onPressed: () =>
-                        ref.read(authControllerProvider.notifier).logout(),
-                    icon: const Icon(Icons.logout),
-                    label: const Text('Sign out'),
-                  ),
-                ],
+                  child: const Text('Log out'),
+                ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );
   }
 }
 
-class _AccessCard extends StatelessWidget {
-  const _AccessCard({
-    required this.state,
-    required this.onRefresh,
-    required this.onRequestSpotifyRead,
-    required this.onRequestSpotifyWrite,
-    required this.onRequestYtmRead,
-    required this.onRequestYtmWrite,
-  });
-
-  final PlatformAccessState state;
-  final VoidCallback onRefresh;
-  final VoidCallback onRequestSpotifyRead;
-  final VoidCallback onRequestSpotifyWrite;
-  final VoidCallback onRequestYtmRead;
-  final VoidCallback onRequestYtmWrite;
-
-  @override
-  Widget build(BuildContext context) {
-    final access = state.access;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.lock_open_rounded, color: Colors.blueAccent),
-              const SizedBox(width: 8),
-              const Text(
-                'Platform access',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              const Spacer(),
-              IconButton(
-                onPressed: state.isLoading ? null : onRefresh,
-                icon: state.isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Manage read/write access here. Sync actions will not open OAuth automatically.',
-            style: TextStyle(color: Colors.grey),
-          ),
-          if (state.message != null) ...[
-            const SizedBox(height: 10),
-            _ProfileRow(label: 'Status', value: state.message!),
-          ],
-          const SizedBox(height: 12),
-          _AccessRow(
-            label: 'Spotify',
-            entry: access?.spotify,
-            isLoading: state.isLoading || state.isLaunching,
-            onRequestRead: onRequestSpotifyRead,
-            onRequestWrite: onRequestSpotifyWrite,
-          ),
-          const SizedBox(height: 8),
-          _AccessRow(
-            label: 'YouTube Music',
-            entry: access?.ytm,
-            isLoading: state.isLoading || state.isLaunching,
-            onRequestRead: onRequestYtmRead,
-            onRequestWrite: onRequestYtmWrite,
-          ),
-          if (!state.isLaunching) const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-}
-
-class _AccessRow extends StatelessWidget {
-  const _AccessRow({
-    required this.label,
-    required this.entry,
-    required this.isLoading,
-    required this.onRequestRead,
-    required this.onRequestWrite,
-  });
-
-  final String label;
-  final PlatformAccessEntry? entry;
-  final bool isLoading;
-  final VoidCallback onRequestRead;
-  final VoidCallback onRequestWrite;
-
-  @override
-  Widget build(BuildContext context) {
-    final connected = entry?.connected ?? false;
-    final scope = entry?.scopeLevel ?? ScopeLevel.none;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(10),
-        color: Theme.of(
-          context,
-        ).colorScheme.surfaceContainerHighest.withValues(alpha: 0.3),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
-              const SizedBox(width: 8),
-              _ScopeChip(scope: scope, connected: connected),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _buildButtons(scope, connected),
-          ),
-        ],
-      ),
-    );
-  }
-
-  List<Widget> _buildButtons(ScopeLevel scope, bool connected) {
-    final buttons = <Widget>[];
-    final showWrite = connected && scope == ScopeLevel.read;
-    final showRead = !connected || scope == ScopeLevel.none;
-
-    if (showRead) {
-      buttons.add(
-        ElevatedButton(
-          onPressed: isLoading ? null : onRequestRead,
-          child: const Text('Connect (Read Access)'),
-        ),
-      );
-    }
-
-    if (showWrite) {
-      buttons.add(
-        OutlinedButton(
-          onPressed: isLoading ? null : onRequestWrite,
-          child: const Text('Grant Write Access'),
-        ),
-      );
-    }
-
-    if (scope == ScopeLevel.write && connected) {
-      buttons.add(
-        OutlinedButton(
-          onPressed: null,
-          child: const Text('Write access granted'),
-        ),
-      );
-    }
-
-    return buttons;
-  }
-}
-
-class _ScopeChip extends StatelessWidget {
-  const _ScopeChip({required this.scope, required this.connected});
-
-  final ScopeLevel scope;
-  final bool connected;
-
-  @override
-  Widget build(BuildContext context) {
-    final label = connected
-        ? switch (scope) {
-            ScopeLevel.write => 'Write access',
-            ScopeLevel.read => 'Read access',
-            _ => 'Connected (scope unknown)',
-          }
-        : 'Not connected';
-    final color = connected
-        ? (scope == ScopeLevel.write
-              ? Colors.green.shade600
-              : Colors.blueGrey.shade600)
-        : Colors.grey;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: color.withValues(alpha: 0.6)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: color, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({required this.label, required this.value});
+class _ProfileValueRow extends StatelessWidget {
+  const _ProfileValueRow({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -439,10 +227,203 @@ class _ProfileRow extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
+          Expanded(
+            child: Text(label, style: const TextStyle(color: Colors.grey)),
+          ),
+          const SizedBox(width: 12),
           Text(value, style: const TextStyle(fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }
+}
+
+class _AccessListRow extends StatelessWidget {
+  const _AccessListRow({
+    required this.label,
+    required this.entry,
+    required this.isLoading,
+    required this.onGrantRead,
+    required this.onGrantWrite,
+  });
+
+  final String label;
+  final PlatformAccessEntry? entry;
+  final bool isLoading;
+  final VoidCallback onGrantRead;
+  final VoidCallback onGrantWrite;
+
+  @override
+  Widget build(BuildContext context) {
+    final connected = entry?.connected ?? false;
+    final scope = entry?.scopeLevel ?? ScopeLevel.none;
+
+    Widget trailing;
+    if (isLoading) {
+      trailing = const SizedBox(
+        width: 22,
+        height: 22,
+        child: CircularProgressIndicator(strokeWidth: 2),
+      );
+    } else if (connected && scope == ScopeLevel.write) {
+      trailing = _StatusPill(label: 'Connected · Write', color: Colors.green);
+    } else if (connected && scope == ScopeLevel.read) {
+      trailing = Wrap(
+        spacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          _StatusPill(label: 'Connected · Read', color: Colors.blueGrey),
+          _TinyButton(
+            label: 'Grant write',
+            onPressed: onGrantWrite,
+            enabled: !isLoading,
+          ),
+        ],
+      );
+    } else {
+      trailing = _TinyButton(
+        label: 'Grant access',
+        onPressed: onGrantRead,
+        enabled: !isLoading,
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        color: Theme.of(context).cardColor,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: Colors.grey.shade800),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+          trailing,
+        ],
+      ),
+    );
+  }
+}
+
+class _TinyButton extends StatelessWidget {
+  const _TinyButton({
+    required this.label,
+    required this.onPressed,
+    this.enabled = true,
+  });
+
+  final String label;
+  final VoidCallback onPressed;
+  final bool enabled;
+
+  @override
+  Widget build(BuildContext context) {
+    return OutlinedButton(
+      onPressed: enabled ? onPressed : null,
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 36),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+      ),
+      child: Text(label),
+    );
+  }
+}
+
+class _StatusPill extends StatelessWidget {
+  const _StatusPill({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.14),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(color: color, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+}
+
+class _InlineMessage extends StatelessWidget {
+  const _InlineMessage({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        const Icon(Icons.info_outline, size: 18, color: Colors.orange),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            message,
+            style: const TextStyle(color: Colors.orange, fontSize: 13),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _SignedOutView extends StatelessWidget {
+  const _SignedOutView({required this.onLogin});
+
+  final VoidCallback onLogin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Profile',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          const Text('You are signed out.'),
+          const SizedBox(height: 12),
+          ElevatedButton(onPressed: onLogin, child: const Text('Go to login')),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileError extends StatelessWidget {
+  const _ProfileError({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Profile',
+            style: TextStyle(fontSize: 24, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 12),
+          Text('Could not load profile: $message'),
         ],
       ),
     );

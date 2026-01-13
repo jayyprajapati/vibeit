@@ -99,6 +99,12 @@ class ApiClient {
     return Playlist.fromJson(data['playlist'] as Map<String, dynamic>);
   }
 
+  Future<void> deletePlaylist(String token, String playlistId) async {
+    final uri = Uri.parse('$baseUrl/playlists/$playlistId');
+    final resp = await _client.delete(uri, headers: _headers(token: token));
+    _throwIfNeeded(resp);
+  }
+
   Future<Playlist> addTrack(
     String token,
     String playlistId,
@@ -156,6 +162,16 @@ class ApiClient {
     return SpotifyPlaylistsPayload.fromJson(data);
   }
 
+  Future<Map<String, dynamic>> getSpotifyPlaylistDetail(
+    String token,
+    String playlistId,
+  ) async {
+    final uri = Uri.parse('$baseUrl/spotify/playlists/$playlistId');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final Map<String, dynamic> data = _decode(resp);
+    return data;
+  }
+
   Future<SpotifyPlaylistsPayload> syncSpotifyPlaylists(String token) async {
     final uri = Uri.parse('$baseUrl/spotify/sync-now');
     final resp = await _client.post(uri, headers: _headers(token: token));
@@ -180,6 +196,16 @@ class ApiClient {
     final resp = await _client.get(uri, headers: _headers(token: token));
     final data = _decode(resp);
     return YtmPlaylistsPayload.fromJson(data);
+  }
+
+  Future<Map<String, dynamic>> getYtmPlaylistDetail(
+    String token,
+    String playlistId,
+  ) async {
+    final uri = Uri.parse('$baseUrl/ytm/playlists/$playlistId');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final Map<String, dynamic> data = _decode(resp);
+    return data;
   }
 
   Future<YtmPlaylistsPayload> syncYtmPlaylists(String token) async {

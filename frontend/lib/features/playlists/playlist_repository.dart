@@ -19,6 +19,10 @@ class PlaylistRepository {
     return apiClient.getPlaylist(token, playlistId);
   }
 
+  Future<void> deletePlaylist(String token, String playlistId) {
+    return apiClient.deletePlaylist(token, playlistId);
+  }
+
   Future<Playlist> addTrack(
     String token,
     String playlistId,

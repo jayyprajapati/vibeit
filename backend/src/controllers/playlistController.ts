@@ -168,3 +168,27 @@ export const removeTrackFromPlaylist = async (req: Request, res: Response, next:
     return next(error);
   }
 };
+
+export const deletePlaylist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    const playlistId = req.params.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    if (!validatePlaylistId(playlistId)) {
+      return res.status(400).json({ error: "Invalid playlist id" });
+    }
+
+    const result = await Playlist.deleteOne({ _id: playlistId, ownerId: userId });
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: "Playlist not found" });
+    }
+
+    return res.status(204).send();
+  } catch (error) {
+    return next(error);
+  }
+};
