@@ -3,6 +3,8 @@ import { randomUUID } from "crypto";
 import { normalizeArtist, normalizeTitle } from "../utils/trackNormalization";
 import { Song } from "../types/song";
 
+export type { Song };
+
 interface MusicBrainzArtistCredit {
   name?: string;
   artist?: {

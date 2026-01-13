@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'playlist_controller.dart';
 import 'playlist_detail_screen.dart';
 import '../../core/models/playlist.dart';
-import '../../core/models/song.dart';
 import '../../core/models/transfer.dart';
 import '../platforms/platform_playlist_models.dart';
 import '../platforms/platform_playlist_detail_page.dart';
@@ -25,14 +24,18 @@ class PlaylistHomeTab extends ConsumerStatefulWidget {
 
 class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
   bool _creating = false;
-  final _globalSearchController = TextEditingController();
-  AsyncValue<List<Song>> _globalResults = const AsyncValue.data([]);
-  String? _addingSongId;
 
-  @override
-  void dispose() {
-    _globalSearchController.dispose();
-    super.dispose();
+  String _normalizeName(String value) => value.trim().toLowerCase();
+
+  Future<void> _refreshPlatformCaches() async {
+    try {
+      await Future.wait([
+        ref.read(spotifyControllerProvider.notifier).load(),
+        ref.read(ytmControllerProvider.notifier).load(),
+      ]);
+    } catch (_) {
+      // Keep showing existing cache if refresh fails; user can retry manually.
+    }
   }
 
   Future<String?> _promptPlaylistName({String? initialName}) async {
@@ -82,143 +85,11 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     );
   }
 
-  Widget _buildSearchCard() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          TextField(
-            controller: _globalSearchController,
-            decoration: InputDecoration(
-              labelText: 'Global song search',
-              hintText: 'Search millions of tracks via MusicBrainz',
-              prefixIcon: const Icon(Icons.search),
-              suffixIcon: IconButton(
-                onPressed: () =>
-                    _searchGlobalSongs(_globalSearchController.text),
-                icon: const Icon(Icons.arrow_forward),
-              ),
-            ),
-            textInputAction: TextInputAction.search,
-            onSubmitted: (value) => _searchGlobalSongs(value),
-          ),
-          const SizedBox(height: 12),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 200),
-            child: _globalResults.when(
-              loading: () => const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: LinearProgressIndicator(minHeight: 4),
-              ),
-              error: (err, _) => Row(
-                children: [
-                  const Icon(Icons.error_outline, color: Colors.orange),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Could not search: ${err.toString()}',
-                      style: const TextStyle(color: Colors.orange),
-                    ),
-                  ),
-                  TextButton(
-                    onPressed: () =>
-                        _searchGlobalSongs(_globalSearchController.text),
-                    child: const Text('Retry'),
-                  ),
-                ],
-              ),
-              data: (songs) {
-                if (songs.isEmpty) return const SizedBox.shrink();
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Top results',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ...songs.map((song) {
-                      final meta = [
-                        song.primaryArtist,
-                        if (song.album != null) song.album,
-                        if (song.year != null) song.year.toString(),
-                      ].whereType<String>().join(' · ');
-
-                      final isAdding = _addingSongId == song.id;
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8),
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.surface,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    song.title,
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  if (meta.isNotEmpty)
-                                    Text(
-                                      meta,
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                ],
-                              ),
-                            ),
-                            SizedBox(
-                              height: 38,
-                              child: ElevatedButton(
-                                onPressed: isAdding
-                                    ? null
-                                    : () => _addSongToPlaylist(song),
-                                child: isAdding
-                                    ? const SizedBox(
-                                        width: 16,
-                                        height: 16,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                        ),
-                                      )
-                                    : const Text('Add'),
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                );
-              },
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildVibeitSection(
     AsyncValue<List<Playlist>> state,
     PlaylistController controller,
+    AsyncValue<SpotifyState> spotifyState,
+    AsyncValue<YtmState> ytmState,
   ) {
     return state.when(
       loading: () =>
@@ -239,6 +110,19 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           );
         }
 
+        final spotifyNames =
+            (spotifyState.valueOrNull?.connected ?? false)
+                ? spotifyState.value!.playlists
+                    .map((p) => _normalizeName(p.name))
+                    .toSet()
+                : <String>{};
+        final ytmNames =
+            (ytmState.valueOrNull?.connected ?? false)
+                ? ytmState.value!.playlists
+                    .map((p) => _normalizeName(p.name))
+                    .toSet()
+                : <String>{};
+
         return SizedBox(
           height: 184,
           child: ListView.separated(
@@ -246,6 +130,35 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
             padding: const EdgeInsets.symmetric(horizontal: 2),
             itemBuilder: (context, index) {
               final playlist = playlists[index];
+              final normalized = _normalizeName(playlist.name);
+              final inSpotify = spotifyNames.contains(normalized);
+              final inYtm = ytmNames.contains(normalized);
+
+              VoidCallback? syncAction;
+              VoidCallback? transferAction;
+              TransferPlatform? forcedDestination;
+              String? transferLabel;
+
+              if (inSpotify && inYtm) {
+                syncAction = () => _openSyncTab(playlist.name);
+              } else if (inSpotify && !inYtm) {
+                forcedDestination = TransferPlatform.ytm;
+                transferAction = () => _openTransferSheet(
+                  playlist.id,
+                  playlist.name,
+                  forcedDestination: forcedDestination,
+                );
+                transferLabel = 'Transfer to YTM';
+              } else if (inYtm && !inSpotify) {
+                forcedDestination = TransferPlatform.spotify;
+                transferAction = () => _openTransferSheet(
+                  playlist.id,
+                  playlist.name,
+                  forcedDestination: forcedDestination,
+                );
+                transferLabel = 'Transfer to Spotify';
+              }
+
               return _VibeitPlaylistCard(
                 playlist: playlist,
                 onOpen: () {
@@ -258,9 +171,9 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
                     ),
                   );
                 },
-                onTransfer: () =>
-                    _openTransferSheet(playlist.id, playlist.name),
-                onSync: () => _openSyncTab(playlist.name),
+                onTransfer: transferAction,
+                onSync: syncAction,
+                transferLabel: transferLabel,
                 onDelete: () => _confirmDelete(playlist.id, playlist.name),
               );
             },
@@ -455,111 +368,6 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     }
   }
 
-  Future<void> _searchGlobalSongs(String query) async {
-    final controller = ref.read(playlistControllerProvider.notifier);
-    final trimmed = query.trim();
-    if (trimmed.isEmpty) {
-      setState(() => _globalResults = const AsyncValue.data([]));
-      return;
-    }
-
-    setState(() => _globalResults = const AsyncValue.loading());
-    try {
-      final songs = await controller.searchSongs(trimmed);
-      setState(() => _globalResults = AsyncValue.data(songs));
-    } catch (err, st) {
-      setState(() => _globalResults = AsyncValue.error(err, st));
-    }
-  }
-
-  Future<void> _addSongToPlaylist(Song song) async {
-    final playlists = ref.read(playlistControllerProvider).valueOrNull ?? [];
-    final controller = ref.read(playlistControllerProvider.notifier);
-
-    final selected = await showModalBottomSheet<Playlist>(
-      context: context,
-      backgroundColor: Theme.of(context).colorScheme.surface,
-      isScrollControlled: true,
-      builder: (context) {
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Add "${song.title}"',
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                ListTile(
-                  leading: const Icon(Icons.add),
-                  title: const Text('Create new playlist'),
-                  onTap: () async {
-                    final playlist = await _createPlaylist(
-                      initialName: 'New mix',
-                      openDetail: false,
-                    );
-                    if (playlist != null && context.mounted) {
-                      Navigator.pop(context, playlist);
-                    }
-                  },
-                ),
-                const Divider(),
-                if (playlists.isEmpty)
-                  const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12),
-                    child: Text('No playlists yet. Create one to add songs.'),
-                  )
-                else
-                  ...playlists.map(
-                    (p) => ListTile(
-                      leading: const Icon(Icons.playlist_play),
-                      title: Text(p.name),
-                      subtitle: Text('${p.tracks.length} tracks'),
-                      onTap: () => Navigator.pop(context, p),
-                    ),
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-
-    if (selected == null) return;
-
-    setState(() => _addingSongId = song.id);
-    try {
-      await controller.addTrack(
-        selected.id,
-        TrackPayload(
-          title: song.title,
-          artist: song.primaryArtist,
-          album: song.album ?? 'Unknown Album',
-          duration: ((song.durationSeconds ?? 180).clamp(1, 3600)).toInt(),
-        ),
-      );
-
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Added to ${selected.name}')));
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
-      }
-    } finally {
-      if (mounted) setState(() => _addingSongId = null);
-    }
-  }
-
   Future<void> _createPlaylistFromButton() => _createPlaylist(openDetail: true);
 
   @override
@@ -586,15 +394,18 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           _DashboardHeader(
             onCreate: _creating ? null : _createPlaylistFromButton,
           ),
-          const SizedBox(height: 16),
-          _buildSearchCard(),
           const SizedBox(height: 24),
           const _SectionHeading(
             title: 'Vibeit playlists',
             subtitle: 'Keep building your own mixes.',
           ),
           const SizedBox(height: 10),
-          _buildVibeitSection(playlistsState, playlistController),
+          _buildVibeitSection(
+            playlistsState,
+            playlistController,
+            spotifyState,
+            ytmState,
+          ),
           const SizedBox(height: 26),
           const _SectionHeading(
             title: 'Spotify playlists',
@@ -616,8 +427,9 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
 
   Future<void> _openTransferSheet(
     String playlistId,
-    String playlistName,
-  ) async {
+    String playlistName, {
+    TransferPlatform? forcedDestination,
+  }) async {
     final result = await showModalBottomSheet<TransferExecuteResult>(
       context: context,
       isScrollControlled: true,
@@ -625,6 +437,7 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
       builder: (_) => TransferBottomSheet(
         playlistId: playlistId,
         playlistName: playlistName,
+        forcedDestination: forcedDestination,
       ),
     );
 
@@ -637,6 +450,8 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
         ),
       ),
     );
+
+    await _refreshPlatformCaches();
   }
 
   void _openSyncTab(String playlistName) {
@@ -841,15 +656,17 @@ class _VibeitPlaylistCard extends StatelessWidget {
   const _VibeitPlaylistCard({
     required this.playlist,
     required this.onOpen,
-    required this.onTransfer,
-    required this.onSync,
+    this.onTransfer,
+    this.transferLabel,
+    this.onSync,
     required this.onDelete,
   });
 
   final Playlist playlist;
   final VoidCallback onOpen;
-  final VoidCallback onTransfer;
-  final VoidCallback onSync;
+  final VoidCallback? onTransfer;
+  final String? transferLabel;
+  final VoidCallback? onSync;
   final VoidCallback onDelete;
 
   @override
@@ -884,22 +701,24 @@ class _VibeitPlaylistCard extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
-                OutlinedButton.icon(
-                  onPressed: onSync,
-                  icon: const Icon(Icons.sync_alt_rounded, size: 18),
-                  label: const Text('Sync'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size(0, 38),
+                if (onSync != null)
+                  OutlinedButton.icon(
+                    onPressed: onSync,
+                    icon: const Icon(Icons.sync_alt_rounded, size: 18),
+                    label: const Text('Sync'),
+                    style: OutlinedButton.styleFrom(
+                      minimumSize: const Size(0, 38),
+                    ),
                   ),
-                ),
-                ElevatedButton.icon(
-                  onPressed: onTransfer,
-                  icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                  label: const Text('Transfer'),
-                  style: ElevatedButton.styleFrom(
-                    minimumSize: const Size(0, 38),
+                if (onTransfer != null)
+                  ElevatedButton.icon(
+                    onPressed: onTransfer,
+                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                    label: Text(transferLabel ?? 'Transfer'),
+                    style: ElevatedButton.styleFrom(
+                      minimumSize: const Size(0, 38),
+                    ),
                   ),
-                ),
                 IconButton(
                   onPressed: onDelete,
                   icon: const Icon(

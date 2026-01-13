@@ -1,6 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { Types } from "mongoose";
 import Playlist, { IPlaylist } from "../models/Playlist";
+import { normalizeTrack } from "../utils/trackNormalization";
 
 const serializePlaylist = (playlist: IPlaylist) => ({
   id: playlist._id.toString(),
@@ -15,6 +16,11 @@ const serializePlaylist = (playlist: IPlaylist) => ({
     artist: track.artist,
     album: track.album,
     duration: track.duration,
+    musicBrainzRecordingId: track.musicBrainzRecordingId ?? null,
+    normalizedTitle: track.normalizedTitle ?? null,
+    normalizedArtist: track.normalizedArtist ?? null,
+    source: track.source ?? null,
+    createdAt: track.createdAt ?? null,
   })),
 });
 
@@ -25,11 +31,15 @@ const validateTrackPayload = (payload: Record<string, unknown>) => {
   const artist = (payload.artist as string | undefined)?.trim() || "";
   const album = (payload.album as string | undefined)?.trim() || "";
   const duration = Number(payload.duration);
+  const musicBrainzRecordingId = payload.musicBrainzRecordingId;
+  const source = payload.source;
 
   if (!title) return "Track title is required";
   if (!artist) return "Track artist is required";
   if (!album) return "Track album is required";
   if (!Number.isFinite(duration) || duration <= 0) return "Track duration must be a positive number";
+  if (musicBrainzRecordingId && typeof musicBrainzRecordingId !== "string") return "Invalid MusicBrainz recording id";
+  if (source && typeof source !== "string") return "Invalid track source";
 
   return null;
 };
@@ -120,11 +130,24 @@ export const addTrackToPlaylist = async (req: Request, res: Response, next: Next
       return res.status(404).json({ error: "Playlist not found" });
     }
 
+    const title = (req.body.title as string).trim();
+    const artist = (req.body.artist as string).trim();
+    const album = (req.body.album as string).trim();
+    const duration = Number(req.body.duration);
+    const musicBrainzRecordingId = (req.body.musicBrainzRecordingId as string | undefined)?.trim() || null;
+    const source = (req.body.source as string | undefined)?.trim() || null;
+    const normalized = normalizeTrack(title, artist);
+
     const track = {
-      title: (req.body.title as string).trim(),
-      artist: (req.body.artist as string).trim(),
-      album: (req.body.album as string).trim(),
-      duration: Number(req.body.duration),
+      title,
+      artist,
+      album,
+      duration,
+      musicBrainzRecordingId,
+      normalizedTitle: normalized.normalizedTitle,
+      normalizedArtist: normalized.normalizedArtist,
+      source: source || (musicBrainzRecordingId ? "MUSICBRAINZ" : null),
+      createdAt: new Date(),
     };
 
     playlist.tracks.push(track);

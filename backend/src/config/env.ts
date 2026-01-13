@@ -15,6 +15,7 @@ const googleClientId = process.env.GOOGLE_CLIENT_ID || "";
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET || "";
 const ytmRedirectUri = process.env.YTM_REDIRECT_URI || "";
 const ytmFrontendRedirect = process.env.YTM_FRONTEND_REDIRECT || "http://localhost:5173/platforms";
+const lastfmApiKey = process.env.LASTFM_API_KEY || "";
 
 export const env = {
   port,
@@ -29,6 +30,7 @@ export const env = {
   googleClientSecret,
   ytmRedirectUri,
   ytmFrontendRedirect,
+  lastfmApiKey,
 };
 
 export default env;

@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import 'models/playlist.dart';
 import 'models/platform_access.dart';
+import 'models/explore.dart';
 import 'models/song.dart';
 import 'models/spotify.dart';
 import 'models/sync.dart';
@@ -141,6 +142,13 @@ class ApiClient {
     final list = (data['results'] as List<dynamic>)
         .cast<Map<String, dynamic>>();
     return list.map(Song.fromJson).toList();
+  }
+
+  Future<ExplorePayload> getExplore(String token) async {
+    final uri = Uri.parse('$baseUrl/explore');
+    final resp = await _client.get(uri, headers: _headers(token: token));
+    final data = _decode(resp);
+    return ExplorePayload.fromJson(data);
   }
 
   Future<SpotifyAuthUrl> getSpotifyAuthUrl(

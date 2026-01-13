@@ -15,10 +15,12 @@ class TransferBottomSheet extends ConsumerStatefulWidget {
     super.key,
     required this.playlistId,
     required this.playlistName,
+    this.forcedDestination,
   });
 
   final String playlistId;
   final String playlistName;
+  final TransferPlatform? forcedDestination;
 
   @override
   ConsumerState<TransferBottomSheet> createState() =>
@@ -26,13 +28,21 @@ class TransferBottomSheet extends ConsumerStatefulWidget {
 }
 
 class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
-  TransferPlatform _destination = TransferPlatform.spotify;
+  late TransferPlatform _destination;
   TransferPreviewResult? _preview;
   bool _isPreviewing = false;
   bool _isExecuting = false;
   String? _message;
 
+  bool get _destinationLocked => widget.forcedDestination != null;
+
   String? get _token => ref.read(authControllerProvider).valueOrNull?.token;
+
+  @override
+  void initState() {
+    super.initState();
+    _destination = widget.forcedDestination ?? TransferPlatform.spotify;
+  }
 
   Future<void> _runPreview() async {
     final token = _token;
@@ -153,29 +163,40 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
                   ChoiceChip(
                     label: const Text('Spotify'),
                     selected: _destination == TransferPlatform.spotify,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _destination = TransferPlatform.spotify;
-                          _preview = null;
-                        });
-                      }
-                    },
+                    onSelected: _destinationLocked
+                        ? null
+                        : (selected) {
+                            if (selected) {
+                              setState(() {
+                                _destination = TransferPlatform.spotify;
+                                _preview = null;
+                              });
+                            }
+                          },
                   ),
                   ChoiceChip(
                     label: const Text('YouTube Music'),
                     selected: _destination == TransferPlatform.ytm,
-                    onSelected: (selected) {
-                      if (selected) {
-                        setState(() {
-                          _destination = TransferPlatform.ytm;
-                          _preview = null;
-                        });
-                      }
-                    },
+                    onSelected: _destinationLocked
+                        ? null
+                        : (selected) {
+                            if (selected) {
+                              setState(() {
+                                _destination = TransferPlatform.ytm;
+                                _preview = null;
+                              });
+                            }
+                          },
                   ),
                 ],
               ),
+              if (_destinationLocked) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Destination locked to avoid duplicates.',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
               const SizedBox(height: 12),
               if (_message != null) ...[
                 Container(

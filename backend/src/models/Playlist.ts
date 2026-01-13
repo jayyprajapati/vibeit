@@ -6,6 +6,11 @@ export interface ITrack extends Types.Subdocument {
   artist: string;
   album: string;
   duration: number;
+  musicBrainzRecordingId?: string | null;
+  normalizedTitle?: string | null;
+  normalizedArtist?: string | null;
+  source?: string | null;
+  createdAt?: Date;
 }
 
 export interface IPlaylist extends Document {
@@ -24,6 +29,11 @@ const trackSchema = new Schema<ITrack>(
     artist: { type: String, required: true, trim: true },
     album: { type: String, required: true, trim: true },
     duration: { type: Number, required: true, min: 1 },
+    musicBrainzRecordingId: { type: String, default: null, trim: true },
+    normalizedTitle: { type: String, default: null, trim: true },
+    normalizedArtist: { type: String, default: null, trim: true },
+    source: { type: String, default: null, trim: true },
+    createdAt: { type: Date, default: Date.now },
   },
   {
     _id: true,

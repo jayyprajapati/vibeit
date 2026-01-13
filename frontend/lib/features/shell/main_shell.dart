@@ -8,6 +8,7 @@ import '../auth/auth_controller.dart';
 import '../auth/platform_access_controller.dart';
 import '../../core/models/platform_access.dart';
 import '../sync/sync_tab.dart';
+import '../explore/explore_tab.dart';
 
 class MainShell extends ConsumerStatefulWidget {
   const MainShell({super.key});
@@ -49,6 +50,7 @@ class _MainShellState extends ConsumerState<MainShell> {
   Widget build(BuildContext context) {
     final pages = <Widget>[
       const PlaylistHomeTab(),
+      const ExploreTab(),
       const SyncTab(),
       const _ProfileTab(),
     ];
@@ -62,6 +64,10 @@ class _MainShellState extends ConsumerState<MainShell> {
           BottomNavigationBarItem(
             icon: Icon(Icons.home_filled),
             label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.explore_outlined),
+            label: 'Explore',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.sync_alt_rounded),

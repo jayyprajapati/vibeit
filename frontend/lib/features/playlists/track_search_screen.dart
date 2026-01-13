@@ -61,6 +61,8 @@ class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
           artist: track.primaryArtist,
           album: track.album ?? 'Unknown Album',
           duration: ((track.durationSeconds ?? 180).clamp(1, 3600)).toInt(),
+          musicBrainzRecordingId: track.musicBrainzRecordingId,
+          source: track.source,
         ),
       );
       if (mounted) {

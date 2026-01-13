@@ -31,6 +31,7 @@ Dev server runs on `PORT` (default 3000) and hot-reloads via ts-node-dev.
 - `GOOGLE_CLIENT_SECRET` — Google OAuth client secret (YouTube Music)
 - `YTM_REDIRECT_URI` — backend callback registered in Google Cloud Console (e.g. https://<ngrok-id>.ngrok-free.app/ytm/callback)
 - `YTM_FRONTEND_REDIRECT` — where to send the user after a successful/failed YTM auth (e.g. http://localhost:5173/platforms)
+- `LASTFM_API_KEY` — Last.fm API key for global trending discovery (required for Explore tab)
 
 Note: Spotify does not accept plain `http://` redirect URIs for production or some dev accounts; use a secure `https://` URL. For local development you can expose your local backend via ngrok and use the generated `https://<ngrok-id>.ngrok-free.app` domain as `SPOTIFY_REDIRECT_URI` and Spotify App Redirect URL.
 

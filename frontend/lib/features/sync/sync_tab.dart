@@ -15,6 +15,17 @@ String _formatTimestamp(DateTime? dt) {
   return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
 }
 
+Future<void> _refreshPlatformCaches(WidgetRef ref) async {
+  try {
+    await Future.wait([
+      ref.read(spotifyControllerProvider.notifier).load(),
+      ref.read(ytmControllerProvider.notifier).load(),
+    ]);
+  } catch (_) {
+    // Preserve existing cache if refresh fails; surfaces via platform tabs.
+  }
+}
+
 class SyncTab extends ConsumerWidget {
   const SyncTab({super.key});
 
@@ -25,7 +36,6 @@ class SyncTab extends ConsumerWidget {
     final syncState = ref.watch(syncControllerProvider);
     final spotifyController = ref.read(spotifyControllerProvider.notifier);
     final ytmController = ref.read(ytmControllerProvider.notifier);
-    final syncController = ref.read(syncControllerProvider.notifier);
 
     return RefreshIndicator(
       onRefresh: () async {
@@ -52,7 +62,6 @@ class SyncTab extends ConsumerWidget {
             spotifyState: spotifyState,
             ytmState: ytmState,
             syncState: syncState,
-            syncController: syncController,
           ),
         ],
       ),
@@ -134,21 +143,20 @@ class _ConnectionStrip extends StatelessWidget {
   }
 }
 
-class _SyncPanel extends StatelessWidget {
+class _SyncPanel extends ConsumerWidget {
   const _SyncPanel({
     required this.spotifyState,
     required this.ytmState,
     required this.syncState,
-    required this.syncController,
   });
 
   final AsyncValue<SpotifyState> spotifyState;
   final AsyncValue<YtmState> ytmState;
   final SyncState syncState;
-  final SyncController syncController;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final syncController = ref.read(syncControllerProvider.notifier);
     if (spotifyState.isLoading || ytmState.isLoading) {
       return const _InfoCard(
         title: 'Loading platform data',
@@ -273,127 +281,193 @@ class _SyncPanel extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 12),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              ElevatedButton.icon(
-                onPressed:
-                    selectedName == null ||
+          ElevatedButton.icon(
+            onPressed:
+                selectedName == null ||
                         syncState.isPreviewing ||
                         syncState.isExecuting
                     ? null
                     : () async {
-                        await _handlePreview(context);
+                        await _startSyncFlow(context, ref, selectedName);
                       },
-                icon: syncState.isPreviewing
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.search),
-                label: Text(
-                  syncState.isPreviewing ? 'Previewing...' : 'Preview changes',
-                ),
-              ),
-              OutlinedButton.icon(
-                onPressed:
-                    selectedName == null ||
-                        syncState.preview == null ||
-                        syncState.isExecuting ||
-                        syncState.isPreviewing
-                    ? null
-                    : () async {
-                        await _handleExecute(context);
-                      },
-                icon: syncState.isExecuting
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.playlist_add_check_rounded),
-                label: Text(
-                  syncState.isExecuting ? 'Running...' : 'Execute sync',
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          if (syncState.preview != null)
-            _PreviewPanel(preview: syncState.preview!, mode: syncState.mode),
-          if (syncState.result != null) _ResultPanel(result: syncState.result!),
-          if (syncState.preview == null && syncState.result == null)
-            const Text(
-              'Preview first to see what will change. Removes only apply in full sync.',
-              style: TextStyle(color: Colors.grey),
+            icon: (syncState.isPreviewing || syncState.isExecuting)
+                ? const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.playlist_add_check_rounded),
+            label: Text(
+              (syncState.isPreviewing || syncState.isExecuting)
+                  ? 'Working...'
+                  : 'Start sync flow',
             ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Flow: confirmation → preview → result. Both caches refresh after sync.',
+            style: TextStyle(color: Colors.grey),
+          ),
         ],
       ),
     );
   }
 
-  Future<void> _handlePreview(BuildContext context) async {
+  Future<void> _startSyncFlow(
+    BuildContext context,
+    WidgetRef ref,
+    String playlistName,
+  ) async {
+    final confirmed = await _showConfirmationSheet(context, playlistName);
+    if (!context.mounted || confirmed != true) return;
+
+    final proceed = await _previewWithSheet(context, ref);
+    if (!context.mounted || !proceed) return;
+
+    await _executeWithSheet(context, ref);
+  }
+
+  Future<bool> _showConfirmationSheet(
+    BuildContext context,
+    String playlistName,
+  ) async {
+    return await showModalBottomSheet<bool>(
+          context: context,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          builder: (ctx) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Confirm sync',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Playlist: $playlistName\nDirection: ${syncState.direction == SyncDirection.spotifyToYtm ? 'Spotify → YTM' : 'YTM → Spotify'}\nMode: ${syncState.mode == SyncMode.fullSync ? 'Full sync (adds & removes)' : 'Append only (adds only)'}',
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () => Navigator.of(ctx).pop(false),
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          child: const Text('Preview changes'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ) ??
+        false;
+  }
+
+  Future<bool> _previewWithSheet(BuildContext context, WidgetRef ref) async {
     try {
-      final ok = await syncController.previewSync();
-      if (!context.mounted || !ok) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Preview ready. Review before running sync.'),
-        ),
-      );
+      final ok = await ref.read(syncControllerProvider.notifier).previewSync();
+      if (!ok) return false;
+      final preview = ref.read(syncControllerProvider).preview;
+      if (preview == null) return false;
+      if (!context.mounted) return false;
+
+      return await showModalBottomSheet<bool>(
+            context: context,
+            isScrollControlled: true,
+            backgroundColor: Theme.of(context).colorScheme.surface,
+            builder: (ctx) {
+              return SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.search, color: Colors.blueAccent),
+                          SizedBox(width: 8),
+                          Text(
+                            'Preview ready',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 10),
+                      _PreviewPanel(preview: preview, mode: syncState.mode),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton(
+                            onPressed: () => Navigator.of(ctx).pop(false),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 8),
+                          ElevatedButton(
+                            onPressed: () => Navigator.of(ctx).pop(true),
+                            child: const Text('Run sync'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ) ??
+          false;
     } catch (err) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(err.toString())));
-      syncController.resetFlow();
+      if (!context.mounted) return false;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err.toString())),
+      );
+      ref.read(syncControllerProvider.notifier).resetFlow();
+      return false;
     }
   }
 
-  Future<void> _handleExecute(BuildContext context) async {
-    if (syncState.preview == null) {
-      if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Preview first to confirm changes.')),
-      );
-      return;
-    }
-
-    final preview = syncState.preview!;
-    final proceed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Ready to sync?'),
-          content: Text(
-            'This will add ${preview.toAdd.length}, remove ${preview.toRemove.length} (only in full sync), and skip ${preview.skipped.length} tracks. Continue?',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(ctx).pop(false),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.of(ctx).pop(true),
-              child: const Text('Continue'),
-            ),
-          ],
-        );
-      },
-    );
-
-    if (proceed != true) return;
-
+  Future<void> _executeWithSheet(BuildContext context, WidgetRef ref) async {
     try {
-      final outcome = await syncController.executeSync();
+      final outcome = await ref.read(syncControllerProvider.notifier).executeSync();
+      final latest = ref.read(syncControllerProvider);
+
       if (!context.mounted) return;
 
-      if (outcome.isSuccess) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Sync complete.')));
+      if (outcome.isSuccess && latest.result != null) {
+        await showModalBottomSheet<void>(
+          context: context,
+          isScrollControlled: true,
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          builder: (ctx) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: _ResultPanel(result: latest.result!),
+              ),
+            );
+          },
+        );
+        if (!context.mounted) return;
+        await _refreshPlatformCaches(ref);
+        ref.read(syncControllerProvider.notifier).resetFlow();
         return;
       }
 
@@ -409,16 +483,16 @@ class _SyncPanel extends StatelessWidget {
       }
 
       if (outcome.errorMessage != null) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(outcome.errorMessage!)));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(outcome.errorMessage!)),
+        );
       }
     } catch (err) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(err.toString())));
-      syncController.resetFlow();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err.toString())),
+      );
+      ref.read(syncControllerProvider.notifier).resetFlow();
     }
   }
 

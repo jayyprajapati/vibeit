@@ -116,7 +116,9 @@ class YtmController extends StateNotifier<AsyncValue<YtmState>> {
     }
 
     final previous = state.valueOrNull;
-    state = const AsyncValue.loading();
+    state = previous != null
+        ? AsyncValue.data(previous.copyWith(clearMessage: true))
+        : const AsyncValue.loading();
     try {
       final payload = await _repo.getPlaylists(token);
       state = AsyncValue.data(YtmState.fromPayload(payload));

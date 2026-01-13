@@ -24,6 +24,17 @@ class PlatformsTab extends ConsumerStatefulWidget {
 class _PlatformsTabState extends ConsumerState<PlatformsTab> {
   _PlatformView _active = _PlatformView.spotify;
 
+  Future<void> _refreshPlatformCaches() async {
+    try {
+      await Future.wait([
+        ref.read(spotifyControllerProvider.notifier).load(),
+        ref.read(ytmControllerProvider.notifier).load(),
+      ]);
+    } catch (_) {
+      // Keep cache as-is on refresh errors; UI already shows prior data.
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final spotifyState = ref.watch(spotifyControllerProvider);
@@ -76,7 +87,11 @@ class _PlatformsTabState extends ConsumerState<PlatformsTab> {
         onRetry: controller.load,
       ),
       data: (data) => data.connected
-          ? _SpotifyConnectedContent(state: data, controller: controller)
+          ? _SpotifyConnectedContent(
+              state: data,
+              controller: controller,
+              onAfterSync: _refreshPlatformCaches,
+            )
           : _SpotifyDisconnectedContent(state: data, controller: controller),
     );
   }
@@ -93,7 +108,11 @@ class _PlatformsTabState extends ConsumerState<PlatformsTab> {
         onRetry: controller.load,
       ),
       data: (data) => data.connected
-          ? _YtmConnectedContent(state: data, controller: controller)
+          ? _YtmConnectedContent(
+              state: data,
+              controller: controller,
+              onAfterSync: _refreshPlatformCaches,
+            )
           : _YtmDisconnectedContent(state: data, controller: controller),
     );
   }
@@ -283,10 +302,12 @@ class _SpotifyConnectedContent extends StatelessWidget {
   const _SpotifyConnectedContent({
     required this.state,
     required this.controller,
+    this.onAfterSync,
   });
 
   final SpotifyState state;
   final SpotifyController controller;
+  final Future<void> Function()? onAfterSync;
 
   @override
   Widget build(BuildContext context) {
@@ -353,9 +374,9 @@ class _SpotifyConnectedContent extends StatelessWidget {
                 style: const TextStyle(color: Colors.black87),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Next scheduled update at ${_formatTimestamp(state.nextScheduledSyncAt)}',
-                style: const TextStyle(color: Colors.black87),
+              const Text(
+                'No background timers. Cache stays until you sync again.',
+                style: TextStyle(color: Colors.black87),
               ),
               if (state.message != null) ...[
                 const SizedBox(height: 8),
@@ -378,6 +399,7 @@ class _SpotifyConnectedContent extends StatelessWidget {
                         : () async {
                             try {
                               await controller.syncNow();
+                              await onAfterSync?.call();
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -591,10 +613,15 @@ class _YtmDisconnectedContent extends StatelessWidget {
 }
 
 class _YtmConnectedContent extends StatelessWidget {
-  const _YtmConnectedContent({required this.state, required this.controller});
+  const _YtmConnectedContent({
+    required this.state,
+    required this.controller,
+    this.onAfterSync,
+  });
 
   final YtmState state;
   final YtmController controller;
+  final Future<void> Function()? onAfterSync;
 
   @override
   Widget build(BuildContext context) {
@@ -661,9 +688,9 @@ class _YtmConnectedContent extends StatelessWidget {
                 style: const TextStyle(color: Colors.black87),
               ),
               const SizedBox(height: 6),
-              Text(
-                'Next scheduled update at ${_formatTimestamp(state.nextScheduledSyncAt)}',
-                style: const TextStyle(color: Colors.black87),
+              const Text(
+                'No background timers. Cache stays until you sync again.',
+                style: TextStyle(color: Colors.black87),
               ),
               if (state.message != null) ...[
                 const SizedBox(height: 8),
@@ -686,6 +713,7 @@ class _YtmConnectedContent extends StatelessWidget {
                         : () async {
                             try {
                               await controller.syncNow();
+                              await onAfterSync?.call();
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(

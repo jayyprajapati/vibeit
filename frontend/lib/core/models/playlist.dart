@@ -5,6 +5,11 @@ class TrackItem {
     required this.artist,
     required this.album,
     required this.duration,
+    this.musicBrainzRecordingId,
+    this.normalizedTitle,
+    this.normalizedArtist,
+    this.source,
+    this.createdAt,
   });
 
   final String id;
@@ -12,6 +17,11 @@ class TrackItem {
   final String artist;
   final String album;
   final int duration;
+  final String? musicBrainzRecordingId;
+  final String? normalizedTitle;
+  final String? normalizedArtist;
+  final String? source;
+  final DateTime? createdAt;
 
   factory TrackItem.fromJson(Map<String, dynamic> json) {
     return TrackItem(
@@ -20,6 +30,13 @@ class TrackItem {
       artist: json['artist'] as String,
       album: json['album'] as String,
       duration: (json['duration'] as num).toInt(),
+      musicBrainzRecordingId: json['musicBrainzRecordingId'] as String?,
+      normalizedTitle: json['normalizedTitle'] as String?,
+      normalizedArtist: json['normalizedArtist'] as String?,
+      source: json['source'] as String?,
+      createdAt: json['createdAt'] != null
+          ? DateTime.tryParse(json['createdAt'] as String)
+          : null,
     );
   }
 }
@@ -77,12 +94,16 @@ class TrackPayload {
     required this.artist,
     required this.album,
     required this.duration,
+    this.musicBrainzRecordingId,
+    this.source,
   });
 
   final String title;
   final String artist;
   final String album;
   final int duration;
+  final String? musicBrainzRecordingId;
+  final String? source;
 
   Map<String, dynamic> toJson() {
     return {
@@ -90,6 +111,9 @@ class TrackPayload {
       'artist': artist,
       'album': album,
       'duration': duration,
+      if (musicBrainzRecordingId != null)
+        'musicBrainzRecordingId': musicBrainzRecordingId,
+      if (source != null) 'source': source,
     };
   }
 }
