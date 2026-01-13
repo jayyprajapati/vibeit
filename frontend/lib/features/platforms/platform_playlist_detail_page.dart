@@ -186,9 +186,7 @@ class _PlatformPlaylistDetailPageState
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: [
-          _ErrorState(message: _error!, onRetry: _load),
-        ],
+        children: [_ErrorState(message: _error!, onRetry: _load)],
       );
     }
 
@@ -196,9 +194,7 @@ class _PlatformPlaylistDetailPageState
       return ListView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: const [
-          Text('No data available.'),
-        ],
+        children: const [Text('No data available.')],
       );
     }
 
@@ -242,7 +238,9 @@ class _PlatformPlaylistDetailPageState
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: widget.playlist.source.accentColor.withValues(alpha: 0.14),
+                  color: widget.playlist.source.accentColor.withValues(
+                    alpha: 0.14,
+                  ),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -276,10 +274,7 @@ class _PlatformPlaylistDetailPageState
               ),
               if (durationLabel != null) ...[
                 const SizedBox(width: 10),
-                Text(
-                  durationLabel,
-                  style: const TextStyle(color: Colors.grey),
-                ),
+                Text(durationLabel, style: const TextStyle(color: Colors.grey)),
               ],
             ],
           ),

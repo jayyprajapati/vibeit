@@ -44,8 +44,16 @@ class PlatformPlaylistTrack {
 
   factory PlatformPlaylistTrack.fromJson(Map<String, dynamic> json) {
     return PlatformPlaylistTrack(
-      title: (json['title'] as String? ?? json['name'] as String? ?? 'Unknown title').trim(),
-      artist: (json['artist'] as String? ?? json['artists'] as String? ?? 'Unknown artist').trim(),
+      title:
+          (json['title'] as String? ??
+                  json['name'] as String? ??
+                  'Unknown title')
+              .trim(),
+      artist:
+          (json['artist'] as String? ??
+                  json['artists'] as String? ??
+                  'Unknown artist')
+              .trim(),
       durationSeconds: (json['durationSeconds'] as num?)?.toInt(),
     );
   }
@@ -74,7 +82,8 @@ class PlatformPlaylistDetail {
     return PlatformPlaylistDetail(
       id: json['id'] as String,
       name: json['name'] as String,
-      itemCount: (json['itemCount'] as num? ?? json['trackCount'] as num? ?? 0).toInt(),
+      itemCount: (json['itemCount'] as num? ?? json['trackCount'] as num? ?? 0)
+          .toInt(),
       lastFetchedAt: DateTime.parse(json['lastFetchedAt'] as String),
       tracks: rawTracks.map(PlatformPlaylistTrack.fromJson).toList(),
       fromCache: json['fromCache'] as bool? ?? false,
