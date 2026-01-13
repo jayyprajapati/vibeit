@@ -291,19 +291,22 @@ class _SpotifyConnectedContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <Widget>[];
-    if (state.fromCache)
+    if (state.fromCache) {
       chips.add(_StatusChip(label: 'Cached', color: Colors.blueGrey.shade700));
-    if (state.refreshFailed)
+    }
+    if (state.refreshFailed) {
       chips.add(
         _StatusChip(label: 'Refresh failed', color: Colors.orange.shade700),
       );
-    if (state.reauthRequired)
+    }
+    if (state.reauthRequired) {
       chips.add(
         _StatusChip(
           label: 'Reconnect needed',
           color: Colors.redAccent.shade200,
         ),
       );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -596,19 +599,22 @@ class _YtmConnectedContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final chips = <Widget>[];
-    if (state.fromCache)
+    if (state.fromCache) {
       chips.add(_StatusChip(label: 'Cached', color: Colors.blueGrey.shade700));
-    if (state.refreshFailed)
+    }
+    if (state.refreshFailed) {
       chips.add(
         _StatusChip(label: 'Refresh failed', color: Colors.orange.shade700),
       );
-    if (state.reauthRequired)
+    }
+    if (state.reauthRequired) {
       chips.add(
         _StatusChip(
           label: 'Reconnect needed',
           color: Colors.redAccent.shade200,
         ),
       );
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,

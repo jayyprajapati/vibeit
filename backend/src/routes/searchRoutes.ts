@@ -1,9 +1,9 @@
 import { Router } from "express";
 import { authMiddleware } from "../middleware/authMiddleware";
-import { searchTracks } from "../controllers/searchController";
+import { searchSongs } from "../controllers/searchController";
 
 const router = Router();
 
-router.get("/tracks", authMiddleware, searchTracks);
+router.get("/songs", authMiddleware, searchSongs);
 
 export default router;

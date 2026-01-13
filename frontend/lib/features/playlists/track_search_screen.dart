@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/playlist.dart';
+import '../../core/models/song.dart';
 import 'playlist_controller.dart';
 
 class TrackSearchScreen extends ConsumerStatefulWidget {
@@ -15,12 +16,13 @@ class TrackSearchScreen extends ConsumerStatefulWidget {
 
 class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
   final _searchController = TextEditingController();
-  AsyncValue<List<TrackItem>> _results = const AsyncValue.data([]);
+  AsyncValue<List<Song>> _results = const AsyncValue.data([]);
   String? _addingTrackId;
 
   @override
   void initState() {
     super.initState();
+    // initial state stays empty until the user searches
     _load(query: '');
   }
 
@@ -32,16 +34,23 @@ class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
 
   Future<void> _load({required String query}) async {
     final controller = ref.read(playlistControllerProvider.notifier);
+    final trimmed = query.trim();
+
+    if (trimmed.isEmpty) {
+      setState(() => _results = const AsyncValue.data([]));
+      return;
+    }
+
     setState(() => _results = const AsyncValue.loading());
     try {
-      final tracks = await controller.searchTracks(query);
+      final tracks = await controller.searchSongs(trimmed);
       setState(() => _results = AsyncValue.data(tracks));
     } catch (err, st) {
       setState(() => _results = AsyncValue.error(err, st));
     }
   }
 
-  Future<void> _addTrack(TrackItem track) async {
+  Future<void> _addTrack(Song track) async {
     final controller = ref.read(playlistControllerProvider.notifier);
     setState(() => _addingTrackId = track.id);
     try {
@@ -49,9 +58,9 @@ class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
         widget.playlistId,
         TrackPayload(
           title: track.title,
-          artist: track.artist,
-          album: track.album,
-          duration: track.duration,
+          artist: track.primaryArtist,
+          album: track.album ?? 'Unknown Album',
+          duration: ((track.durationSeconds ?? 180).clamp(1, 3600)).toInt(),
         ),
       );
       if (mounted) {
@@ -83,7 +92,7 @@ class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
                 controller: _searchController,
                 decoration: InputDecoration(
                   labelText: 'Search songs',
-                  hintText: 'Search the internal catalog',
+                  hintText: 'Global search via MusicBrainz',
                   suffixIcon: IconButton(
                     onPressed: () =>
                         _load(query: _searchController.text.trim()),
@@ -116,20 +125,25 @@ class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
                       ),
                     ],
                   ),
-                  data: (tracks) {
-                    if (tracks.isEmpty) {
+                  data: (songs) {
+                    if (songs.isEmpty) {
                       return const Center(
                         child: Text(
-                          'No matching tracks. Try a different keyword.',
+                          'No matching songs yet. Try a different keyword.',
                         ),
                       );
                     }
                     return ListView.separated(
-                      itemCount: tracks.length,
+                      itemCount: songs.length,
                       separatorBuilder: (_, __) => const SizedBox(height: 8),
                       itemBuilder: (context, index) {
-                        final track = tracks[index];
+                        final track = songs[index];
                         final isAdding = _addingTrackId == track.id;
+                        final subtitle = [
+                          track.primaryArtist,
+                          if (track.album != null) track.album,
+                          if (track.year != null) track.year.toString(),
+                        ].whereType<String>().join(' · ');
                         return Container(
                           padding: const EdgeInsets.all(12),
                           decoration: BoxDecoration(
@@ -150,12 +164,13 @@ class _TrackSearchScreenState extends ConsumerState<TrackSearchScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      '${track.artist} · ${track.album}',
-                                      style: const TextStyle(
-                                        color: Colors.grey,
+                                    if (subtitle.isNotEmpty)
+                                      Text(
+                                        subtitle,
+                                        style: const TextStyle(
+                                          color: Colors.grey,
+                                        ),
                                       ),
-                                    ),
                                   ],
                                 ),
                               ),

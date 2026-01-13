@@ -1,5 +1,6 @@
 import '../../core/api_client.dart';
 import '../../core/models/playlist.dart';
+import '../../core/models/song.dart';
 
 class PlaylistRepository {
   PlaylistRepository({required this.apiClient});
@@ -34,7 +35,7 @@ class PlaylistRepository {
     return apiClient.removeTrack(token, playlistId, trackId);
   }
 
-  Future<List<TrackItem>> searchTracks(String token, String query) {
-    return apiClient.searchTracks(token, query);
+  Future<List<Song>> searchSongs(String token, String query) {
+    return apiClient.searchSongs(token, query);
   }
 }

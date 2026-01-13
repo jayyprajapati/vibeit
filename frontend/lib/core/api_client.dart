@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 
 import 'models/playlist.dart';
 import 'models/platform_access.dart';
+import 'models/song.dart';
 import 'models/spotify.dart';
 import 'models/sync.dart';
 import 'models/transfer.dart';
@@ -125,14 +126,15 @@ class ApiClient {
     return Playlist.fromJson(data['playlist'] as Map<String, dynamic>);
   }
 
-  Future<List<TrackItem>> searchTracks(String token, String query) async {
+  Future<List<Song>> searchSongs(String token, String query) async {
     final uri = Uri.parse(
-      '$baseUrl/search/tracks?q=${Uri.encodeQueryComponent(query)}',
+      '$baseUrl/search/songs?q=${Uri.encodeQueryComponent(query)}',
     );
     final resp = await _client.get(uri, headers: _headers(token: token));
     final data = _decode(resp);
-    final list = (data['tracks'] as List<dynamic>).cast<Map<String, dynamic>>();
-    return list.map(TrackItem.fromJson).toList();
+    final list = (data['results'] as List<dynamic>)
+        .cast<Map<String, dynamic>>();
+    return list.map(Song.fromJson).toList();
   }
 
   Future<SpotifyAuthUrl> getSpotifyAuthUrl(

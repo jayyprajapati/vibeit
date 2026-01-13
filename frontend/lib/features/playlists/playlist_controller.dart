@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/playlist.dart';
+import '../../core/models/song.dart';
 import '../../providers.dart';
 import 'playlist_repository.dart';
 
@@ -75,9 +76,9 @@ class PlaylistController extends StateNotifier<AsyncValue<List<Playlist>>> {
     return updated;
   }
 
-  Future<List<TrackItem>> searchTracks(String query) {
+  Future<List<Song>> searchSongs(String query) {
     final token = _requireToken();
-    return _repo.searchTracks(token, query);
+    return _repo.searchSongs(token, query);
   }
 
   void _replacePlaylist(Playlist playlist) {

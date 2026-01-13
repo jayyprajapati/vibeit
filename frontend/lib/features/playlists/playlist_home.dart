@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'playlist_controller.dart';
 import 'playlist_detail_screen.dart';
+import '../../core/models/playlist.dart';
+import '../../core/models/song.dart';
 import '../../core/models/transfer.dart';
 import '../sync/sync_tab.dart';
 import '../platforms/sync_controller.dart';
@@ -17,15 +19,21 @@ class PlaylistHomeTab extends ConsumerStatefulWidget {
 
 class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
   bool _creating = false;
+  final _globalSearchController = TextEditingController();
+  AsyncValue<List<Song>> _globalResults = const AsyncValue.data([]);
+  String? _addingSongId;
 
-  Future<void> _createPlaylist() async {
-    final controller = ref.read(playlistControllerProvider.notifier);
-    final nameController = TextEditingController();
+  @override
+  void dispose() {
+    _globalSearchController.dispose();
+    super.dispose();
+  }
+
+  Future<String?> _promptPlaylistName({String? initialName}) async {
+    final nameController = TextEditingController(text: initialName ?? "");
     final formKey = GlobalKey<FormState>();
-    final navigator = Navigator.of(context);
-    final scaffold = ScaffoldMessenger.of(context);
 
-    final created = await showDialog<bool>(
+    return showDialog<String>(
       context: context,
       builder: (context) {
         return AlertDialog(
@@ -52,56 +60,164 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           ),
           actions: [
             TextButton(
-              onPressed: () => Navigator.pop(context, false),
+              onPressed: () => Navigator.pop(context),
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: () async {
+              onPressed: () {
                 if (!formKey.currentState!.validate()) return;
-                try {
-                  setState(() => _creating = true);
-                  final playlist = await controller.createPlaylist(
-                    nameController.text.trim(),
-                  );
-                  if (!mounted) return;
-                  navigator.pop(true);
-                  navigator.push(
-                    MaterialPageRoute(
-                      builder: (_) => PlaylistDetailScreen(
-                        playlistId: playlist.id,
-                        initialName: playlist.name,
-                      ),
-                    ),
-                  );
-                } catch (e) {
-                  if (mounted) {
-                    scaffold.showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
-                  }
-                } finally {
-                  if (mounted) setState(() => _creating = false);
-                }
+                Navigator.pop(context, nameController.text.trim());
               },
-              child: _creating
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Create'),
+              child: const Text('Create'),
             ),
           ],
         );
       },
     );
+  }
 
-    if (created == true && mounted) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Playlist created')));
+  Future<Playlist?> _createPlaylist({
+    String? initialName,
+    bool openDetail = true,
+  }) async {
+    final controller = ref.read(playlistControllerProvider.notifier);
+    final scaffold = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final name = await _promptPlaylistName(initialName: initialName);
+    if (name == null) return null;
+
+    try {
+      setState(() => _creating = true);
+      final playlist = await controller.createPlaylist(name);
+      if (!mounted) return playlist;
+      if (openDetail) {
+        navigator.push(
+          MaterialPageRoute(
+            builder: (_) => PlaylistDetailScreen(
+              playlistId: playlist.id,
+              initialName: playlist.name,
+            ),
+          ),
+        );
+      }
+      scaffold.showSnackBar(const SnackBar(content: Text('Playlist created')));
+      return playlist;
+    } catch (e) {
+      if (mounted) {
+        scaffold.showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+      return null;
+    } finally {
+      if (mounted) setState(() => _creating = false);
     }
   }
+
+  Future<void> _searchGlobalSongs(String query) async {
+    final controller = ref.read(playlistControllerProvider.notifier);
+    final trimmed = query.trim();
+    if (trimmed.isEmpty) {
+      setState(() => _globalResults = const AsyncValue.data([]));
+      return;
+    }
+
+    setState(() => _globalResults = const AsyncValue.loading());
+    try {
+      final songs = await controller.searchSongs(trimmed);
+      setState(() => _globalResults = AsyncValue.data(songs));
+    } catch (err, st) {
+      setState(() => _globalResults = AsyncValue.error(err, st));
+    }
+  }
+
+  Future<void> _addSongToPlaylist(Song song) async {
+    final playlists = ref.read(playlistControllerProvider).valueOrNull ?? [];
+    final controller = ref.read(playlistControllerProvider.notifier);
+
+    final selected = await showModalBottomSheet<Playlist>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      isScrollControlled: true,
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Add "${song.title}"',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text('Create new playlist'),
+                  onTap: () async {
+                    final playlist = await _createPlaylist(
+                      initialName: 'New mix',
+                      openDetail: false,
+                    );
+                    if (playlist != null && context.mounted) {
+                      Navigator.pop(context, playlist);
+                    }
+                  },
+                ),
+                const Divider(),
+                if (playlists.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12),
+                    child: Text('No playlists yet. Create one to add songs.'),
+                  )
+                else
+                  ...playlists.map(
+                    (p) => ListTile(
+                      leading: const Icon(Icons.playlist_play),
+                      title: Text(p.name),
+                      subtitle: Text('${p.tracks.length} tracks'),
+                      onTap: () => Navigator.pop(context, p),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+
+    if (selected == null) return;
+
+    setState(() => _addingSongId = song.id);
+    try {
+      await controller.addTrack(
+        selected.id,
+        TrackPayload(
+          title: song.title,
+          artist: song.primaryArtist,
+          album: song.album ?? 'Unknown Album',
+          duration: ((song.durationSeconds ?? 180).clamp(1, 3600)).toInt(),
+        ),
+      );
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Added to ${selected.name}')));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(e.toString())));
+      }
+    } finally {
+      if (mounted) setState(() => _addingSongId = null);
+    }
+  }
+
+  Future<void> _createPlaylistFromButton() => _createPlaylist(openDetail: true);
 
   @override
   Widget build(BuildContext context) {
@@ -136,10 +252,141 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
               child: SizedBox(
                 height: 40,
                 child: ElevatedButton.icon(
-                  onPressed: _creating ? null : _createPlaylist,
+                  onPressed: _creating ? null : _createPlaylistFromButton,
                   icon: const Icon(Icons.add),
                   label: const Text('Create'),
                 ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget searchCard() {
+      return Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            TextField(
+              controller: _globalSearchController,
+              decoration: InputDecoration(
+                labelText: 'Global song search',
+                hintText: 'Search millions of tracks via MusicBrainz',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: IconButton(
+                  onPressed: () =>
+                      _searchGlobalSongs(_globalSearchController.text),
+                  icon: const Icon(Icons.arrow_forward),
+                ),
+              ),
+              textInputAction: TextInputAction.search,
+              onSubmitted: (value) => _searchGlobalSongs(value),
+            ),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: _globalResults.when(
+                loading: () => const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: LinearProgressIndicator(minHeight: 4),
+                ),
+                error: (err, _) => Row(
+                  children: [
+                    const Icon(Icons.error_outline, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Could not search: ${err.toString()}',
+                        style: const TextStyle(color: Colors.orange),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () =>
+                          _searchGlobalSongs(_globalSearchController.text),
+                      child: const Text('Retry'),
+                    ),
+                  ],
+                ),
+                data: (songs) {
+                  if (songs.isEmpty) {
+                    return const SizedBox.shrink();
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Top results',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      ...songs.map((song) {
+                        final meta = [
+                          song.primaryArtist,
+                          if (song.album != null) song.album,
+                          if (song.year != null) song.year.toString(),
+                        ].whereType<String>().join(' · ');
+
+                        final isAdding = _addingSongId == song.id;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).cardColor,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      song.title,
+                                      style: const TextStyle(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w700,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    if (meta.isNotEmpty)
+                                      Text(
+                                        meta,
+                                        style: const TextStyle(
+                                          color: Colors.grey,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              SizedBox(
+                                height: 38,
+                                child: ElevatedButton(
+                                  onPressed: isAdding
+                                      ? null
+                                      : () => _addSongToPlaylist(song),
+                                  child: isAdding
+                                      ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                          ),
+                                        )
+                                      : const Text('Add'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                  );
+                },
               ),
             ),
           ],
@@ -172,51 +419,65 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           ],
         ),
         data: (playlists) {
+          final children = <Widget>[header(), searchCard()];
+
           if (playlists.isEmpty) {
-            return ListView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              children: [
-                header(),
+            children.add(
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
+                child: _EmptyState(
+                  onCreate: _creating ? null : _createPlaylistFromButton,
+                ),
+              ),
+            );
+          } else {
+            children.add(
+              const Padding(
+                padding: EdgeInsets.fromLTRB(24, 12, 24, 4),
+                child: Text(
+                  'Your playlists',
+                  style: TextStyle(fontWeight: FontWeight.w700),
+                ),
+              ),
+            );
+
+            for (final playlist in playlists) {
+              children.add(
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 24,
-                    vertical: 12,
+                    vertical: 6,
                   ),
-                  child: _EmptyState(
-                    onCreate: _creating ? null : _createPlaylist,
+                  child: _PlaylistCard(
+                    title: playlist.name,
+                    subtitle:
+                        '${playlist.tracks.length} tracks · Updated ${playlist.updatedAt.toLocal().toString().split(' ').first}',
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => PlaylistDetailScreen(
+                            playlistId: playlist.id,
+                            initialName: playlist.name,
+                          ),
+                        ),
+                      );
+                    },
+                    onTransfer: () =>
+                        _openTransferSheet(playlist.id, playlist.name),
+                    onSync: () => _openSyncTab(playlist.name),
                   ),
                 ),
-              ],
-            );
+              );
+            }
           }
 
-          return ListView.separated(
+          return ListView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
-            itemCount: playlists.length + 1,
-            separatorBuilder: (context, index) => const SizedBox(height: 12),
-            itemBuilder: (context, index) {
-              if (index == 0) return header();
-              final playlist = playlists[index - 1];
-              return _PlaylistCard(
-                title: playlist.name,
-                subtitle:
-                    '${playlist.tracks.length} tracks · Updated ${playlist.updatedAt.toLocal().toString().split(' ').first}',
-                onTap: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => PlaylistDetailScreen(
-                        playlistId: playlist.id,
-                        initialName: playlist.name,
-                      ),
-                    ),
-                  );
-                },
-                onTransfer: () =>
-                    _openTransferSheet(playlist.id, playlist.name),
-                onSync: () => _openSyncTab(playlist.name),
-              );
-            },
+            padding: const EdgeInsets.only(bottom: 24),
+            children: children,
           );
         },
       ),
