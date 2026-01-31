@@ -41,6 +41,13 @@ export class YtmTokenExpiredError extends Error {
   }
 }
 
+export class YtmReauthRequiredError extends Error {
+  constructor(message = "YouTube Music session expired. Please reconnect.") {
+    super(message);
+    this.name = "YtmReauthRequiredError";
+  }
+}
+
 interface RawYtmPlaylist {
   ytmPlaylistId: string;
   name: string;
@@ -101,20 +108,61 @@ const fetchVideoDurations = async (
   return durations;
 };
 
+const parseTokenError = async (resp: Response): Promise<{ message: string; reauth: boolean }> => {
+  const status = resp.status;
+  const raw = await resp.text();
+
+  let errorCode: string | undefined;
+  let description: string | undefined;
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    errorCode = (parsed["error"] as string | undefined) || undefined;
+    description = (parsed["error_description"] as string | undefined) || undefined;
+  } catch (parseError) {
+    // leave raw as-is when JSON parsing fails
+    console.warn("[ytm] Failed to parse token error response", parseError);
+  }
+
+  const normalizedDesc = description?.toLowerCase?.() || "";
+  const reauth = (status === 400 || status === 401 || status === 403) &&
+    (errorCode === "invalid_grant" || normalizedDesc.includes("invalid_grant"));
+
+  const messageParts = [
+    `Google token request failed (${status})`,
+    description || errorCode || raw || "Unknown error",
+  ];
+
+  return {
+    message: messageParts.filter(Boolean).join(": "),
+    reauth,
+  };
+};
+
 const postToTokenEndpoint = async (body: URLSearchParams): Promise<YtmTokenResponse> => {
   if (!env.googleClientId || !env.googleClientSecret) {
     throw new Error("Google client credentials are missing");
   }
 
-  const resp = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString(),
-  });
+  let resp: Response;
+
+  try {
+    resp = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: body.toString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown network error";
+    throw new Error(`Google token request failed: ${message}`);
+  }
 
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Google token request failed (${resp.status}): ${text}`);
+    const { message, reauth } = await parseTokenError(resp);
+    if (reauth) {
+      throw new YtmReauthRequiredError(message);
+    }
+    throw new Error(message);
   }
 
   const data = (await resp.json()) as Record<string, unknown>;

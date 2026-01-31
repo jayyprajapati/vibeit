@@ -46,6 +46,13 @@ export class SpotifyTokenExpiredError extends Error {
   }
 }
 
+export class SpotifyReauthRequiredError extends Error {
+  constructor(message = "Spotify session expired. Please reconnect.") {
+    super(message);
+    this.name = "SpotifyReauthRequiredError";
+  }
+}
+
 const encodeClientCredentials = () => {
   const { spotifyClientId, spotifyClientSecret } = env;
   if (!spotifyClientId || !spotifyClientSecret) {
@@ -73,20 +80,60 @@ export const buildSpotifyAuthUrl = (state: string, level: SpotifyScopeLevel = "R
   return `https://accounts.spotify.com/authorize?${params.toString()}`;
 };
 
+const parseTokenError = async (resp: Response): Promise<{ message: string; reauth: boolean }> => {
+  const status = resp.status;
+  const raw = await resp.text();
+
+  let errorCode: string | undefined;
+  let description: string | undefined;
+
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    errorCode = (parsed["error"] as string | undefined) || undefined;
+    description = (parsed["error_description"] as string | undefined) || undefined;
+  } catch (parseError) {
+    console.warn("[spotify] Failed to parse token error response", parseError);
+  }
+
+  const normalizedDesc = description?.toLowerCase?.() || "";
+  const reauth = (status === 400 || status === 401 || status === 403) &&
+    (errorCode === "invalid_grant" || normalizedDesc.includes("invalid_grant"));
+
+  const messageParts = [
+    `Spotify token request failed (${status})`,
+    description || errorCode || raw || "Unknown error",
+  ];
+
+  return {
+    message: messageParts.filter(Boolean).join(": "),
+    reauth,
+  };
+};
+
 const postToTokenEndpoint = async (body: URLSearchParams): Promise<SpotifyTokenResponse> => {
   const basic = encodeClientCredentials();
-  const resp = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Basic ${basic}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: body.toString(),
-  });
+  let resp: Response;
+
+  try {
+    resp = await fetch(TOKEN_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: body.toString(),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown network error";
+    throw new Error(`Spotify token request failed: ${message}`);
+  }
 
   if (!resp.ok) {
-    const text = await resp.text();
-    throw new Error(`Spotify token request failed (${resp.status}): ${text}`);
+    const { message, reauth } = await parseTokenError(resp);
+    if (reauth) {
+      throw new SpotifyReauthRequiredError(message);
+    }
+    throw new Error(message);
   }
 
   const data = (await resp.json()) as Record<string, unknown>;

@@ -9,6 +9,7 @@ import {
   YtmRemotePlaylist,
   YtmScopeLevel,
   YtmTokenExpiredError,
+  YtmReauthRequiredError,
   buildYtmAuthUrl,
   exchangeCodeForToken,
   fetchYtmPlaylists,
@@ -121,6 +122,11 @@ const ensureAccessToken = async (userId: string) => {
     await account.save();
     return account.accessToken;
   } catch (error) {
+    if (error instanceof YtmReauthRequiredError) {
+      console.warn("[ytm] Refresh token invalid, requires reauth", error);
+      throw new ReauthRequiredError("YouTube Music session expired. Please reconnect.");
+    }
+
     console.error("[ytm] Token refresh failed", error);
     throw new ReauthRequiredError("Please reconnect YouTube Music");
   }
@@ -201,6 +207,23 @@ const fetchAndCachePlaylists = async (userId: string, forceRemote: boolean): Pro
       nextScheduledSyncAt: new Date(now.getTime() + CACHE_TTL_MS),
     };
   } catch (error) {
+    if (error instanceof YtmReauthRequiredError) {
+      if (lastSyncedAt) {
+        return returnCached({ reauthRequired: true, refreshFailed: true, message: error.message });
+      }
+
+      return {
+        connected: true,
+        playlists: [],
+        fromCache: false,
+        reauthRequired: true,
+        refreshFailed: true,
+        lastSyncedAt,
+        nextScheduledSyncAt: lastSyncedAt ? new Date(lastSyncedAtMs + CACHE_TTL_MS) : null,
+        message: error.message,
+      };
+    }
+
     if (error instanceof ReauthRequiredError) {
       if (lastSyncedAt) {
         return returnCached({ reauthRequired: true, refreshFailed: true, message: error.message });
@@ -411,6 +434,10 @@ export const getYtmPlaylistDetail = async (req: Request, res: Response, next: Ne
       return res.status(error.statusCode).json({ error: error.message });
     }
 
+    if (error instanceof YtmReauthRequiredError) {
+      return res.status(401).json({ error: error.message });
+    }
+
     if (error instanceof ReauthRequiredError) {
       return res.status(401).json({ error: error.message });
     }
@@ -494,14 +521,21 @@ export const importYtmPlaylist = async (req: Request, res: Response, next: NextF
             throw new ReauthRequiredError("YouTube Music account not linked");
           }
 
-          const refreshedTokens = await refreshAccessToken(account.refreshToken);
-          account.accessToken = refreshedTokens.accessToken;
-          account.refreshToken = refreshedTokens.refreshToken || account.refreshToken;
-          account.expiresAt = new Date(Date.now() + refreshedTokens.expiresIn * 1000);
-          await account.save();
-          accessToken = account.accessToken;
-          refreshed = true;
-          continue;
+          try {
+            const refreshedTokens = await refreshAccessToken(account.refreshToken);
+            account.accessToken = refreshedTokens.accessToken;
+            account.refreshToken = refreshedTokens.refreshToken || account.refreshToken;
+            account.expiresAt = new Date(Date.now() + refreshedTokens.expiresIn * 1000);
+            await account.save();
+            accessToken = account.accessToken;
+            refreshed = true;
+            continue;
+          } catch (refreshError) {
+            if (refreshError instanceof YtmReauthRequiredError) {
+              throw new ReauthRequiredError(refreshError.message);
+            }
+            throw refreshError;
+          }
         }
 
         throw error;
@@ -510,6 +544,9 @@ export const importYtmPlaylist = async (req: Request, res: Response, next: NextF
   } catch (error) {
     if (error instanceof UsageLimitError) {
       return res.status(error.statusCode).json({ error: error.message });
+    }
+    if (error instanceof YtmReauthRequiredError) {
+      return res.status(401).json({ error: error.message });
     }
     if (error instanceof ReauthRequiredError) {
       return res.status(401).json({ error: error.message });

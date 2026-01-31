@@ -14,6 +14,7 @@ import {
   fetchSpotifyPlaylistWithTracks,
   refreshAccessToken,
   SpotifyTokenExpiredError,
+  SpotifyReauthRequiredError,
 } from "../utils/spotify";
 
 const CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -110,6 +111,11 @@ const ensureAccessToken = async (userId: string) => {
     await account.save();
     return account.accessToken;
   } catch (error) {
+    if (error instanceof SpotifyReauthRequiredError) {
+      console.warn("[spotify] Refresh token invalid, requires reauth", error);
+      throw new ReauthRequiredError("Spotify session expired. Please reconnect.");
+    }
+
     console.error("[spotify] Token refresh failed", error);
     throw new ReauthRequiredError("Please reconnect Spotify");
   }
@@ -180,6 +186,23 @@ const fetchAndCachePlaylists = async (
       nextScheduledSyncAt: new Date(now.getTime() + CACHE_TTL_MS),
     };
   } catch (error) {
+    if (error instanceof SpotifyReauthRequiredError) {
+      if (lastSyncedAt) {
+        return returnCached({ reauthRequired: true, refreshFailed: true, message: error.message });
+      }
+
+      return {
+        connected: true,
+        playlists: [],
+        fromCache: false,
+        reauthRequired: true,
+        refreshFailed: true,
+        lastSyncedAt,
+        nextScheduledSyncAt: lastSyncedAt ? new Date(lastSyncedAtMs + CACHE_TTL_MS) : null,
+        message: error.message,
+      };
+    }
+
     if (error instanceof ReauthRequiredError) {
       if (lastSyncedAt) {
         return returnCached({ reauthRequired: true, refreshFailed: true, message: error.message });
@@ -375,6 +398,10 @@ export const getSpotifyPlaylistDetail = async (req: Request, res: Response, next
       return res.status(401).json({ error: error.message });
     }
 
+    if (error instanceof SpotifyReauthRequiredError) {
+      return res.status(401).json({ error: error.message });
+    }
+
     if (error instanceof SpotifyTokenExpiredError) {
       return res.status(401).json({ error: "Spotify access token expired. Please reconnect." });
     }
@@ -462,14 +489,21 @@ export const importSpotifyPlaylist = async (req: Request, res: Response, next: N
             throw new ReauthRequiredError("Spotify account not linked");
           }
 
-          const refreshedTokens = await refreshAccessToken(account.refreshToken);
-          account.accessToken = refreshedTokens.accessToken;
-          account.refreshToken = refreshedTokens.refreshToken || account.refreshToken;
-          account.expiresAt = new Date(Date.now() + refreshedTokens.expiresIn * 1000);
-          await account.save();
-          accessToken = account.accessToken;
-          refreshed = true;
-          continue;
+          try {
+            const refreshedTokens = await refreshAccessToken(account.refreshToken);
+            account.accessToken = refreshedTokens.accessToken;
+            account.refreshToken = refreshedTokens.refreshToken || account.refreshToken;
+            account.expiresAt = new Date(Date.now() + refreshedTokens.expiresIn * 1000);
+            await account.save();
+            accessToken = account.accessToken;
+            refreshed = true;
+            continue;
+          } catch (refreshError) {
+            if (refreshError instanceof SpotifyReauthRequiredError) {
+              throw new ReauthRequiredError(refreshError.message);
+            }
+            throw refreshError;
+          }
         }
 
         throw error;
