@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design_system.dart';
 import '../../providers.dart';
 import '../auth/email_screen.dart';
 import '../playlists/playlist_home.dart';
@@ -200,18 +201,17 @@ class _ProfileTab extends ConsumerWidget {
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-                child: ElevatedButton(
-                  onPressed: () =>
-                      ref.read(authControllerProvider.notifier).logout(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red.shade600,
-                    foregroundColor: Colors.white,
-                    minimumSize: const Size.fromHeight(52),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton(
+                    onPressed: () =>
+                        ref.read(authControllerProvider.notifier).logout(),
+                    style: TextButton.styleFrom(
+                      foregroundColor: AppColors.error,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
+                    child: const Text('Log out'),
                   ),
-                  child: const Text('Log out'),
                 ),
               ),
             ),

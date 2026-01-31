@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'core/design_system.dart';
 import 'features/auth/auth_gate.dart';
 
 class VibeitApp extends StatelessWidget {
@@ -7,65 +8,60 @@ class VibeitApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final base = ThemeData.dark();
-    final green = const Color(0xFF8FBF92);
-    const surface = Color(0xFF121511);
-    const panel = Color(0xFF1A1F1B);
+    final textTheme = AppTypography.textTheme;
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      theme: base.copyWith(
-        scaffoldBackgroundColor: surface,
-        colorScheme: base.colorScheme.copyWith(
-          primary: green,
-          secondary: const Color(0xFF6B9080),
-          surface: surface,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: AppColors.background,
+        canvasColor: AppColors.background,
+        textTheme: textTheme,
+        colorScheme: ColorScheme.dark(
+          surface: AppColors.background,
+          primary: AppColors.accent,
+          secondary: AppColors.accent,
+          onPrimary: AppColors.textPrimary,
+          onSecondary: AppColors.textPrimary,
+          onSurface: AppColors.textPrimary,
         ),
-        appBarTheme: const AppBarTheme(backgroundColor: surface, elevation: 0),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: green,
-            foregroundColor: Colors.black,
-            minimumSize: const Size(88, 48),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
+        appBarTheme: const AppBarTheme(
+          backgroundColor: AppColors.background,
+          elevation: 0,
+          foregroundColor: AppColors.textPrimary,
         ),
-        outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            minimumSize: const Size(88, 48),
-            side: const BorderSide(color: Colors.grey),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-          ),
-        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(style: AppButtonStyles.primary),
+        outlinedButtonTheme: OutlinedButtonThemeData(style: AppButtonStyles.subtle),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
-          fillColor: panel,
+          fillColor: AppColors.surface,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
           border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade700),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: Colors.grey.shade700),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.border),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide(color: green),
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: AppColors.accent, width: 1.8),
           ),
-          labelStyle: const TextStyle(color: Colors.grey),
-          hintStyle: const TextStyle(color: Colors.grey),
+          hintStyle: textTheme.bodyMedium?.copyWith(color: AppColors.textMuted),
         ),
+        dividerColor: AppColors.border,
+        cardColor: AppColors.surface,
         bottomNavigationBarTheme: const BottomNavigationBarThemeData(
-          backgroundColor: surface,
-          selectedItemColor: Color(0xFF8FBF92),
-          unselectedItemColor: Colors.grey,
+          backgroundColor: AppColors.background,
+          selectedItemColor: AppColors.accent,
+          unselectedItemColor: AppColors.textMuted,
           type: BottomNavigationBarType.fixed,
         ),
-        cardColor: panel,
+        snackBarTheme: const SnackBarThemeData(
+          backgroundColor: AppColors.surface,
+          contentTextStyle: TextStyle(color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+        ),
       ),
       home: const AuthGate(),
     );

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design_system.dart';
 import '../../providers.dart';
 import 'otp_screen.dart';
 
@@ -29,16 +30,15 @@ class _EmailScreenState extends ConsumerState<EmailScreen> {
 
     try {
       await ref.read(authRepositoryProvider).requestOtp(email);
-      if (mounted) {
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => OtpScreen(email: email)));
-      }
+      if (!mounted) return;
+      Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => OtpScreen(email: email)),
+      );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(e.toString())));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(e.toString())),
+        );
       }
     } finally {
       if (mounted) {
@@ -49,68 +49,93 @@ class _EmailScreenState extends ConsumerState<EmailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
+      backgroundColor: AppColors.background,
       body: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 32),
-              Text(
-                'Sign in with email',
-                style: Theme.of(context).textTheme.headlineMedium,
+              Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.border),
+                    ),
+                    child: const Icon(Icons.graphic_eq_rounded, color: AppColors.textPrimary, size: 26),
+                  ),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('VibeIt', style: textTheme.titleLarge),
+                      Text('Calm, premium entry', style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary)),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              Text(
-                'We use one-time codes sent to your email. No passwords, no social logins.',
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyLarge?.copyWith(color: Colors.grey[400]),
-              ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 56),
+              Text('Sign in to continue', style: textTheme.headlineMedium),
+              const SizedBox(height: 16),
               Form(
                 key: _formKey,
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    TextFormField(
-                      controller: _emailController,
-                      keyboardType: TextInputType.emailAddress,
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        hintText: 'you@example.com',
+                    ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 420),
+                      child: TextFormField(
+                        controller: _emailController,
+                        autofocus: true,
+                        keyboardType: TextInputType.emailAddress,
+                        style: textTheme.titleLarge?.copyWith(color: AppColors.textPrimary),
+                        decoration: AppDecorations.lineInput(hint: 'Enter your email'),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Enter your email';
+                          }
+                          final emailRegex = RegExp(r'^[^\s@]+@[^\s@]+\.[^\s@]+$');
+                          if (!emailRegex.hasMatch(value.trim())) {
+                            return 'Enter a valid email';
+                          }
+                          return null;
+                        },
                       ),
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Enter your email';
-                        }
-                        final emailRegex = RegExp(
-                          r'^[^\s@]+@[^\s@]+\.[^\s@]+$',
-                        );
-                        if (!emailRegex.hasMatch(value.trim())) {
-                          return 'Enter a valid email';
-                        }
-                        return null;
-                      },
                     ),
                     const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: _submitting ? null : _submit,
-                        child: _submitting
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Send code'),
-                      ),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          style: AppButtonStyles.primary,
+                          onPressed: _submitting ? null : _submit,
+                          icon: _submitting
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textPrimary),
+                                )
+                              : const Icon(Icons.arrow_forward_rounded, size: 18),
+                          label: Text(
+                            _submitting ? 'Sending...' : 'Get OTP',
+                            style: textTheme.labelLarge,
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
+              ),
+              const Spacer(),
+              Text(
+                'We\'ll send a one-time code to verify you',
+                style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
               ),
             ],
           ),
