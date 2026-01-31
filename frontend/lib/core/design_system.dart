@@ -2,15 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
-  static const background = Color(0xFF0B0F14);
-  static const surface = Color(0xFF121826);
+  // Light mode base colors
+  static const background = Color(0xFFFFFFFF);
+  static const surface = Color(0xFFF9FAFB);
   static const accent = Color(0xFF2867ED);
   static const accentActive = Color(0xFF1E54C6);
-  static const textPrimary = Color(0xFFF8FAFC);
-  static const textSecondary = Color(0xFF94A3B8);
-  static const textMuted = Color(0xFF64748B);
-  static const border = Color(0xFF1E293B);
+  static const textPrimary = Color(0xFF0F172A);
+  static const textSecondary = Color(0xFF64748B);
+  static const textMuted = Color(0xFF94A3B8);
+  static const border = Color(0xFFE2E8F0);
   static const error = Color(0xFFEF4444);
+
+  // Pastel card backgrounds
+  static const spotifyCardBg = Color(0xFFECFDF5);
+  static const ytmCardBg = Color(0xFFFEF7ED);
+
+  // Brand colors
+  static const spotifyGreen = Color(0xFF1DB954);
+  static const ytmRed = Color(0xFFFF2D55);
 }
 
 class AppTypography {
@@ -29,6 +38,11 @@ class AppTypography {
     ),
     titleLarge: GoogleFonts.spaceGrotesk(
       fontSize: 22,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary,
+    ),
+    titleMedium: GoogleFonts.spaceGrotesk(
+      fontSize: 18,
       fontWeight: FontWeight.w600,
       color: AppColors.textPrimary,
     ),
@@ -109,7 +123,7 @@ class AppButtonStyles {
       return AppColors.accent;
     }),
     foregroundColor: WidgetStateProperty.resolveWith((states) {
-      final base = AppColors.textPrimary;
+      const base = Colors.white;
       return states.contains(WidgetState.disabled) ? base.withValues(alpha: 0.4) : base;
     }),
     minimumSize: const WidgetStatePropertyAll(Size(0, 56)),
@@ -132,15 +146,93 @@ class AppButtonStyles {
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
     textStyle: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600),
   );
+
+  static ButtonStyle neutral = ButtonStyle(
+    backgroundColor: WidgetStateProperty.all(AppColors.surface),
+    foregroundColor: WidgetStateProperty.all(AppColors.textPrimary),
+    minimumSize: const WidgetStatePropertyAll(Size(0, 48)),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    padding: const WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+    ),
+    elevation: const WidgetStatePropertyAll(0),
+    textStyle: WidgetStatePropertyAll(
+      GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600),
+    ),
+  );
+
+  /// White background button with dark text and subtle shadow - for light mode action buttons
+  static ButtonStyle lightAction = ButtonStyle(
+    backgroundColor: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.disabled)) {
+        return Colors.white.withValues(alpha: 0.7);
+      }
+      if (states.contains(WidgetState.pressed)) {
+        return AppColors.surface;
+      }
+      return Colors.white;
+    }),
+    foregroundColor: WidgetStateProperty.resolveWith((states) {
+      return states.contains(WidgetState.disabled)
+          ? AppColors.textPrimary.withValues(alpha: 0.4)
+          : AppColors.textPrimary;
+    }),
+    minimumSize: const WidgetStatePropertyAll(Size(0, 52)),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+    ),
+    padding: const WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: 28, vertical: 14),
+    ),
+    elevation: WidgetStateProperty.resolveWith((states) {
+      if (states.contains(WidgetState.pressed)) return 0;
+      return 2;
+    }),
+    shadowColor: WidgetStatePropertyAll(
+      Colors.black.withValues(alpha: 0.08),
+    ),
+    textStyle: WidgetStatePropertyAll(
+      GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.w700),
+    ),
+  );
+
+  /// Wider neutral button for logout
+  static ButtonStyle neutralWide = ButtonStyle(
+    backgroundColor: WidgetStateProperty.all(AppColors.surface),
+    foregroundColor: WidgetStateProperty.all(AppColors.textPrimary),
+    minimumSize: const WidgetStatePropertyAll(Size(160, 48)),
+    shape: WidgetStatePropertyAll(
+      RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    ),
+    padding: const WidgetStatePropertyAll(
+      EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+    ),
+    elevation: const WidgetStatePropertyAll(0),
+    textStyle: WidgetStatePropertyAll(
+      GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600),
+    ),
+  );
 }
 
 class AppShadows {
   static List<BoxShadow> soft = [
     BoxShadow(
-      color: Colors.black.withValues(alpha: 0.28),
-      blurRadius: 18,
+      color: Colors.black.withValues(alpha: 0.06),
+      blurRadius: 12,
       spreadRadius: 0,
-      offset: const Offset(0, 12),
+      offset: const Offset(0, 4),
+    ),
+  ];
+
+  static List<BoxShadow> card = [
+    BoxShadow(
+      color: Colors.black.withValues(alpha: 0.04),
+      blurRadius: 8,
+      spreadRadius: 0,
+      offset: const Offset(0, 2),
     ),
   ];
 }
+

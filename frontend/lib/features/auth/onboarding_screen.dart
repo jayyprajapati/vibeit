@@ -30,7 +30,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       text: repo.getSavedName(widget.profileId) ?? _fallbackName(widget.email),
     );
     _preferredPlatform = repo.getSavedPlatform(widget.profileId);
-    // Prime platform access state so cards can reflect live status.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(platformAccessControllerProvider.notifier).load();
     });
@@ -55,7 +54,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Future<void> _onContinue() async {
     if (_preferredPlatform == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Choose your go-to music app')),
+        const SnackBar(content: Text('Please select your preferred music platform')),
       );
       return;
     }
@@ -99,114 +98,161 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           children: [
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Set up your vibe', style: textTheme.headlineMedium),
-                    const SizedBox(height: 6),
+                    // Header
                     Text(
-                      'One calm screen and you are in.',
-                      style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
-                    ),
-                    const SizedBox(height: 28),
-                    Text('What should we call you?', style: textTheme.titleLarge),
-                    const SizedBox(height: 12),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: TextField(
-                        controller: _nameController,
-                        autofocus: true,
-                        style: textTheme.titleLarge?.copyWith(letterSpacing: 0.2),
-                        decoration: AppDecorations.lineInput(hint: 'Your name'),
+                      'Help us make your experience better',
+                      style: textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 28),
-                    Text('Your go-to music app?', style: textTheme.titleLarge),
                     const SizedBox(height: 6),
                     Text(
-                      'We\'ll use this when opening songs',
-                      style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                      'Quick insights to know you better',
+                      style: textTheme.bodyMedium?.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
                     ),
-                    const SizedBox(height: 14),
-                    Column(
+                    const SizedBox(height: 32),
+
+                    // Question 1: Name
+                    Text(
+                      'What should we call you?',
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: _nameController,
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      decoration: AppDecorations.lineInput(hint: 'Your name'),
+                    ),
+                    const SizedBox(height: 28),
+                    const Divider(color: AppColors.border, height: 1),
+                    const SizedBox(height: 28),
+
+                    // Question 2: Preferred platform
+                    Text(
+                      "What's your go-to music platform?",
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
                       children: [
-                        _PlatformRow(
-                          label: 'Spotify',
-                          brandColor: const Color(0xFF1DB954),
-                          selected: _preferredPlatform == PlatformKind.spotify,
-                          onTap: () => _selectPlatform(PlatformKind.spotify),
+                        Expanded(
+                          child: _FlatTile(
+                            label: 'Spotify',
+                            icon: Icons.music_note_rounded,
+                            brandColor: AppColors.spotifyGreen,
+                            isSelected: _preferredPlatform == PlatformKind.spotify,
+                            onTap: () => _selectPlatform(PlatformKind.spotify),
+                          ),
                         ),
-                        const SizedBox(height: 12),
-                        _PlatformRow(
-                          label: 'YouTube Music',
-                          brandColor: const Color(0xFFFF2D55),
-                          selected: _preferredPlatform == PlatformKind.ytm,
-                          onTap: () => _selectPlatform(PlatformKind.ytm),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _FlatTile(
+                            label: 'YouTube Music',
+                            icon: Icons.play_circle_filled_rounded,
+                            brandColor: AppColors.ytmRed,
+                            isSelected: _preferredPlatform == PlatformKind.ytm,
+                            onTap: () => _selectPlatform(PlatformKind.ytm),
+                          ),
                         ),
                       ],
                     ),
                     const SizedBox(height: 28),
-                    Text('Connect your music apps', style: textTheme.titleLarge),
-                    const SizedBox(height: 6),
+                    const Divider(color: AppColors.border, height: 1),
+                    const SizedBox(height: 28),
+
+                    // Question 3: Connect apps
                     Text(
-                      'Sync and transfer playlists seamlessly',
-                      style: textTheme.bodyMedium?.copyWith(color: AppColors.textSecondary),
+                      'Want to connect and sync everything seamlessly?',
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                     if (accessState.message != null) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       Text(
                         accessState.message!,
-                        style: textTheme.bodyMedium?.copyWith(color: AppColors.error, fontWeight: FontWeight.w600),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: AppColors.error,
+                        ),
                       ),
                     ],
-                    const SizedBox(height: 14),
-                    _ConnectRow(
-                      label: 'Spotify',
-                      brandColor: const Color(0xFF1DB954),
-                      entry: accessState.access?.spotify,
-                      isLoading: accessState.isLoading || accessState.isLaunching,
-                      onConnect: () => accessController.requestAuth(
-                        PlatformKind.spotify,
-                        ScopeLevel.write,
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    _ConnectRow(
-                      label: 'YouTube Music',
-                      brandColor: const Color(0xFFFF2D55),
-                      entry: accessState.access?.ytm,
-                      isLoading: accessState.isLoading || accessState.isLaunching,
-                      onConnect: () => accessController.requestAuth(
-                        PlatformKind.ytm,
-                        ScopeLevel.write,
-                      ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _ConnectTile(
+                            label: 'Spotify',
+                            icon: Icons.music_note_rounded,
+                            brandColor: AppColors.spotifyGreen,
+                            isConnected: accessState.access?.spotify.connected ?? false,
+                            isLoading: accessState.isLoading || accessState.isLaunching,
+                            onTap: () => accessController.requestAuth(
+                              PlatformKind.spotify,
+                              ScopeLevel.write,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: _ConnectTile(
+                            label: 'YouTube Music',
+                            icon: Icons.play_circle_filled_rounded,
+                            brandColor: AppColors.ytmRed,
+                            isConnected: accessState.access?.ytm.connected ?? false,
+                            isLoading: accessState.isLoading || accessState.isLaunching,
+                            onTap: () => accessController.requestAuth(
+                              PlatformKind.ytm,
+                              ScopeLevel.write,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
             ),
+            // Continue button
             SafeArea(
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-                child: Row(
-                  children: [
-                    ElevatedButton(
-                      style: AppButtonStyles.primary,
-                      onPressed: _saving ? null : _onContinue,
-                      child: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: AppColors.textPrimary,
-                              ),
-                            )
-                          : const Text('Continue'),
-                    ),
-                  ],
+                child: SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: AppButtonStyles.primary,
+                    onPressed: _saving ? null : _onContinue,
+                    child: _saving
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Text('Continue'),
+                              SizedBox(width: 8),
+                              Icon(Icons.arrow_forward_rounded, size: 18),
+                            ],
+                          ),
+                  ),
                 ),
               ),
             ),
@@ -217,105 +263,127 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 }
 
-class _PlatformRow extends StatelessWidget {
-  const _PlatformRow({
+/// Flat compact tile for platform selection (about button height)
+class _FlatTile extends StatelessWidget {
+  const _FlatTile({
     required this.label,
+    required this.icon,
     required this.brandColor,
-    required this.selected,
+    required this.isSelected,
     required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final Color brandColor;
-  final bool selected;
+  final bool isSelected;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return InkWell(
+    return GestureDetector(
       onTap: onTap,
-      child: Column(
-        children: [
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 16,
-                backgroundColor: brandColor,
-                child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 18),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isSelected ? brandColor.withValues(alpha: 0.1) : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isSelected ? brandColor : AppColors.border,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: brandColor, size: 20),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                overflow: TextOverflow.ellipsis,
               ),
-              const SizedBox(width: 12),
-              Expanded(child: Text(label, style: textTheme.titleMedium)),
-              if (selected) const Icon(Icons.check, color: AppColors.textPrimary),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Container(
-            height: 2,
-            decoration: BoxDecoration(
-              color: selected ? AppColors.accent : AppColors.border,
             ),
-          ),
-        ],
+            if (isSelected) ...[
+              const SizedBox(width: 6),
+              Icon(Icons.check_rounded, color: brandColor, size: 16),
+            ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ConnectRow extends StatelessWidget {
-  const _ConnectRow({
+/// Flat compact connect tile
+class _ConnectTile extends StatelessWidget {
+  const _ConnectTile({
     required this.label,
+    required this.icon,
     required this.brandColor,
-    required this.entry,
+    required this.isConnected,
     required this.isLoading,
-    required this.onConnect,
+    required this.onTap,
   });
 
   final String label;
+  final IconData icon;
   final Color brandColor;
-  final PlatformAccessEntry? entry;
+  final bool isConnected;
   final bool isLoading;
-  final VoidCallback onConnect;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    final connected = entry?.connected ?? false;
-
-    return Row(
-      children: [
-        CircleAvatar(
-          radius: 16,
-          backgroundColor: brandColor,
-          child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 18),
+    return GestureDetector(
+      onTap: isLoading ? null : onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isConnected ? brandColor.withValues(alpha: 0.1) : AppColors.surface,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isConnected ? brandColor : AppColors.border,
+            width: isConnected ? 1.5 : 1,
+          ),
         ),
-        const SizedBox(width: 12),
-        Expanded(child: Text(label, style: textTheme.titleMedium)),
-        Row(
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            if (connected) ...[
-              const Icon(Icons.check, color: AppColors.textPrimary, size: 18),
-              const SizedBox(width: 6),
-              Text('Connected', style: textTheme.bodyMedium?.copyWith(color: AppColors.textPrimary)),
-            ] else ...[
-              TextButton(
-                onPressed: isLoading ? null : onConnect,
-                style: TextButton.styleFrom(
-                  foregroundColor: AppColors.textPrimary,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 14,
-                        height: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Connect'),
+            Icon(icon, color: brandColor, size: 20),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                overflow: TextOverflow.ellipsis,
               ),
-            ],
+            ),
+            const SizedBox(width: 6),
+            if (isLoading)
+              SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: brandColor,
+                ),
+              )
+            else if (isConnected)
+              Icon(Icons.check_rounded, color: brandColor, size: 16)
+            else
+              Icon(Icons.arrow_forward_ios_rounded, color: AppColors.textMuted, size: 12),
           ],
         ),
-      ],
+      ),
     );
   }
 }

@@ -18,7 +18,6 @@ class OtpScreen extends ConsumerStatefulWidget {
 class _OtpScreenState extends ConsumerState<OtpScreen> {
   final _boxes = List.generate(6, (_) => TextEditingController());
   final _focusNodes = List.generate(6, (_) => FocusNode());
-  final _keyboardFocus = FocusNode();
   bool _submitting = false;
   bool _resending = false;
 
@@ -28,6 +27,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     for (final node in _focusNodes) {
       node.addListener(() => setState(() {}));
     }
+    // Show OTP sent toast on screen load
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showToast('OTP sent successfully. Valid for 10 minutes.', isError: false);
+    });
   }
 
   @override
@@ -38,14 +41,44 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     for (final f in _focusNodes) {
       f.dispose();
     }
-    _keyboardFocus.dispose();
     super.dispose();
   }
 
   String get _code => _boxes.map((c) => c.text).join();
 
+  void _showToast(String message, {required bool isError}) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: [
+            Icon(
+              isError ? Icons.error_outline_rounded : Icons.check_circle_outline_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: isError ? AppColors.error : AppColors.textPrimary,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        duration: const Duration(seconds: 3),
+      ),
+    );
+  }
+
   void _onDigitChanged(int index, String value) {
     final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+    
+    // Handle paste (multiple digits)
     if (digits.length > 1) {
       for (var i = 0; i < digits.length && index + i < _boxes.length; i++) {
         _boxes[index + i].text = digits[i];
@@ -57,28 +90,36 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       setState(() {});
       return;
     }
+    
+    // Single digit entered
     if (digits.length == 1) {
       _boxes[index].text = digits;
       _boxes[index].selection = TextSelection.fromPosition(
         TextPosition(offset: _boxes[index].text.length),
       );
-    }
-
-    if (value.isNotEmpty && index < 5) {
-      _focusNodes[index + 1].requestFocus();
+      // Move to next box
+      if (index < 5) {
+        _focusNodes[index + 1].requestFocus();
+      }
     }
 
     setState(() {});
   }
 
-  void _onKey(int index, KeyEvent evt) {
+  void _onKeyEvent(int index, KeyEvent evt) {
     if (evt is! KeyDownEvent) return;
-    if (evt.logicalKey == LogicalKeyboardKey.backspace && _boxes[index].text.isEmpty) {
-      if (index > 0) {
+    
+    if (evt.logicalKey == LogicalKeyboardKey.backspace) {
+      if (_boxes[index].text.isNotEmpty) {
+        // Box has value: clear it, stay on same box
+        _boxes[index].text = '';
+        setState(() {});
+      } else if (index > 0) {
+        // Box is empty: move to previous box and clear it
         _focusNodes[index - 1].requestFocus();
         _boxes[index - 1].text = '';
+        setState(() {});
       }
-      setState(() {});
     }
   }
 
@@ -98,9 +139,10 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        _showToast(e.toString().contains('expired') 
+            ? 'OTP expired. Please request a new code.'
+            : 'Invalid OTP. Please try again.', 
+            isError: true);
       }
     } finally {
       if (mounted) {
@@ -114,15 +156,11 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
     try {
       await ref.read(authRepositoryProvider).requestOtp(widget.email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Code resent')),
-        );
+        _showToast('OTP sent successfully. Valid for 10 minutes.', isError: false);
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(e.toString())),
-        );
+        _showToast(e.toString(), isError: true);
       }
     } finally {
       if (mounted) {
@@ -150,43 +188,69 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 12, 24, 24),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Verify your email', style: textTheme.headlineMedium),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Text(widget.email, style: textTheme.bodyLarge),
-                  const SizedBox(width: 12),
-                  TextButton(
-                    onPressed: () => Navigator.of(context).pop(),
-                    style: TextButton.styleFrom(
-                      foregroundColor: AppColors.textSecondary,
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                    ),
-                    child: const Text('Edit email'),
-                  ),
-                ],
+              const Spacer(flex: 1),
+              // Title
+              Text(
+                'Verify your email',
+                style: textTheme.headlineMedium,
+                textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 32),
-              Text('Enter the 6-digit code', style: textTheme.bodyMedium),
-              const SizedBox(height: 14),
-              KeyboardListener(
-                focusNode: _keyboardFocus,
-                onKeyEvent: (e) {
-                  for (var i = 0; i < _boxes.length; i++) {
-                    _onKey(i, e);
-                  }
-                },
+              const SizedBox(height: 20),
+              // Email chip
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.border),
+                ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  children: List.generate(6, (index) {
-                    final isFocused = _focusNodes[index].hasFocus;
-                    return Padding(
-                      padding: EdgeInsets.only(right: index == 5 ? 0 : 10),
-                      child: SizedBox(
-                        width: 48,
-                        height: 56,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      widget.email,
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: const Icon(
+                        Icons.edit_rounded,
+                        size: 16,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 40),
+              // Instructions
+              Text(
+                'Enter the 6-digit code',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textSecondary,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              // OTP boxes
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(6, (index) {
+                  final isFocused = _focusNodes[index].hasFocus;
+                  final hasValue = _boxes[index].text.isNotEmpty;
+                  
+                  return Padding(
+                    padding: EdgeInsets.only(right: index == 5 ? 0 : 10),
+                    child: SizedBox(
+                      width: 48,
+                      height: 56,
+                      child: KeyboardListener(
+                        focusNode: FocusNode(),
+                        onKeyEvent: (e) => _onKeyEvent(index, e),
                         child: TextField(
                           controller: _boxes[index],
                           focusNode: _focusNodes[index],
@@ -195,40 +259,64 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                           keyboardType: TextInputType.number,
                           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                           maxLength: 1,
-                          style: textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700),
-                            decoration: InputDecoration(
-                              counterText: '',
-                              enabledBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: BorderSide(
-                                  color: isFocused ? AppColors.accent : AppColors.border,
-                                  width: isFocused ? 2 : 1.2,
-                                ),
+                          style: textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textPrimary,
+                          ),
+                          decoration: InputDecoration(
+                            counterText: '',
+                            filled: true,
+                            fillColor: isFocused || hasValue 
+                                ? Colors.white 
+                                : AppColors.surface,
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: hasValue ? AppColors.accent : AppColors.border,
+                                width: hasValue ? 2 : 1.2,
                               ),
-                              focusedBorder: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(10),
-                                borderSide: const BorderSide(color: AppColors.accent, width: 2),
-                              ),
-                              contentPadding: const EdgeInsets.only(bottom: 6),
                             ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: const BorderSide(
+                                color: AppColors.accent,
+                                width: 2,
+                              ),
+                            ),
+                            contentPadding: const EdgeInsets.only(bottom: 4),
+                          ),
                           onChanged: (v) => _onDigitChanged(index, v),
                           onTap: () => _focusNodes[index].requestFocus(),
                         ),
                       ),
-                    );
-                  }),
-                ),
+                    ),
+                  );
+                }),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+              // Expiry helper text
+              Text(
+                'Code expires in 10 minutes',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: AppColors.textMuted,
+                  fontSize: 13,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 32),
+              // Verify button
               AnimatedSwitcher(
-                duration: const Duration(milliseconds: 180),
+                duration: const Duration(milliseconds: 200),
                 child: showVerify
                     ? ElevatedButton(
                         key: const ValueKey('verify_btn'),
-                        style: AppButtonStyles.primary,
+                        style: AppButtonStyles.lightAction,
                         onPressed: _submitting ? null : _submit,
-                        child: _submitting
-                            ? const SizedBox(
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (_submitting)
+                              const SizedBox(
                                 width: 18,
                                 height: 18,
                                 child: CircularProgressIndicator(
@@ -236,11 +324,23 @@ class _OtpScreenState extends ConsumerState<OtpScreen> {
                                   color: AppColors.textPrimary,
                                 ),
                               )
-                            : const Text('Verify & continue'),
+                            else ...[
+                              Text(
+                                'Verify & continue',
+                                style: textTheme.labelLarge?.copyWith(
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Icon(Icons.arrow_forward_rounded, size: 18),
+                            ],
+                          ],
+                        ),
                       )
-                    : const SizedBox.shrink(),
+                    : const SizedBox(height: 52),
               ),
-              const SizedBox(height: 10),
+              const Spacer(flex: 2),
+              // Resend
               TextButton(
                 onPressed: _resending ? null : _resend,
                 style: TextButton.styleFrom(
