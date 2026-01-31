@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design_system.dart';
 import '../../core/models/spotify.dart';
 import '../../core/models/sync.dart';
 import '../../core/models/ytm.dart';
@@ -205,7 +206,7 @@ class _SyncPanel extends ConsumerWidget {
         children: [
           Row(
             children: const [
-              Icon(Icons.compare_arrows_rounded, color: Colors.blueAccent),
+              Icon(Icons.compare_arrows_rounded, color: AppColors.accent),
               SizedBox(width: 10),
               Text(
                 'Cross-platform sync',
@@ -399,7 +400,7 @@ class _SyncPanel extends ConsumerWidget {
                     children: [
                       Row(
                         children: const [
-                          Icon(Icons.search, color: Colors.blueAccent),
+                          Icon(Icons.search, color: AppColors.accent),
                           SizedBox(width: 8),
                           Text(
                             'Preview ready',

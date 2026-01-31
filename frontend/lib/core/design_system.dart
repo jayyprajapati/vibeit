@@ -5,8 +5,8 @@ class AppColors {
   // Light mode base colors
   static const background = Color(0xFFFFFFFF);
   static const surface = Color(0xFFF9FAFB);
-  static const accent = Color(0xFF2867ED);
-  static const accentActive = Color(0xFF1E54C6);
+  static const accent = Color(0xFF1E4ED8);
+  static const accentActive = Color(0xFF163DAF);
   static const textPrimary = Color(0xFF0F172A);
   static const textSecondary = Color(0xFF64748B);
   static const textMuted = Color(0xFF94A3B8);
@@ -20,6 +20,35 @@ class AppColors {
   // Brand colors
   static const spotifyGreen = Color(0xFF1DB954);
   static const ytmRed = Color(0xFFFF2D55);
+
+  // Success toast base
+  static const success = Color(0xFF22C55E);
+}
+
+class AppGradients {
+  static const blue = LinearGradient(
+    colors: [Color(0xFF1E4ED8), Color(0xFF5B8CFF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const spotify = LinearGradient(
+    colors: [Color(0xFF16A34A), Color(0xFF22C55E)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const ytm = LinearGradient(
+    colors: [Color(0xFFFF4D4D), Color(0xFFFF8B5F)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const success = LinearGradient(
+    colors: [Color(0xFF34D399), Color(0xFF16A34A)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
 }
 
 class AppTypography {
@@ -91,7 +120,10 @@ class AppDecorations {
   static InputDecoration input({required String hint}) {
     return InputDecoration(
       hintText: hint,
-      hintStyle: TextStyle(color: AppColors.textMuted, fontWeight: FontWeight.w600),
+      hintStyle: TextStyle(
+        color: AppColors.textMuted,
+        fontWeight: FontWeight.w600,
+      ),
       filled: true,
       fillColor: AppColors.surface,
       contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 18),
@@ -124,7 +156,9 @@ class AppButtonStyles {
     }),
     foregroundColor: WidgetStateProperty.resolveWith((states) {
       const base = Colors.white;
-      return states.contains(WidgetState.disabled) ? base.withValues(alpha: 0.4) : base;
+      return states.contains(WidgetState.disabled)
+          ? base.withValues(alpha: 0.4)
+          : base;
     }),
     minimumSize: const WidgetStatePropertyAll(Size(0, 56)),
     shape: WidgetStatePropertyAll(
@@ -144,7 +178,10 @@ class AppButtonStyles {
     side: const BorderSide(color: AppColors.border),
     minimumSize: const Size(0, 52),
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-    textStyle: GoogleFonts.spaceGrotesk(fontSize: 15, fontWeight: FontWeight.w600),
+    textStyle: GoogleFonts.spaceGrotesk(
+      fontSize: 15,
+      fontWeight: FontWeight.w600,
+    ),
   );
 
   static ButtonStyle neutral = ButtonStyle(
@@ -190,9 +227,7 @@ class AppButtonStyles {
       if (states.contains(WidgetState.pressed)) return 0;
       return 2;
     }),
-    shadowColor: WidgetStatePropertyAll(
-      Colors.black.withValues(alpha: 0.08),
-    ),
+    shadowColor: WidgetStatePropertyAll(Colors.black.withValues(alpha: 0.08)),
     textStyle: WidgetStatePropertyAll(
       GoogleFonts.spaceGrotesk(fontSize: 16, fontWeight: FontWeight.w700),
     ),
@@ -235,4 +270,3 @@ class AppShadows {
     ),
   ];
 }
-

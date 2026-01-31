@@ -61,16 +61,16 @@ class _MainShellState extends ConsumerState<MainShell> {
       body: SafeArea(child: pages[_index]),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _index,
-        onTap: (value) => setState(() => _index = value),
+        onTap: (i) => setState(() => _index = i),
+        type: BottomNavigationBarType.fixed,
+        selectedItemColor: AppColors.accent,
+        unselectedItemColor: AppColors.textMuted,
         items: const [
           BottomNavigationBarItem(
-            icon: Icon(Icons.home_filled),
-            label: 'Dashboard',
+            icon: Icon(Icons.library_music_rounded),
+            label: 'Home',
           ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.explore_outlined),
-            label: 'Explore',
-          ),
+          BottomNavigationBarItem(icon: Icon(Icons.search), label: 'Explore'),
           BottomNavigationBarItem(
             icon: Icon(Icons.sync_alt_rounded),
             label: 'Sync',
@@ -384,6 +384,7 @@ class _ProfileTab extends ConsumerWidget {
                       label: 'Spotify',
                       icon: Icons.music_note_rounded,
                       brandColor: AppColors.spotifyGreen,
+                      gradient: AppGradients.spotify,
                       isSelected: preferredPlatform == PlatformKind.spotify,
                       onTap: preferredPlatform == PlatformKind.spotify
                           ? null
@@ -400,6 +401,7 @@ class _ProfileTab extends ConsumerWidget {
                       label: 'YouTube Music',
                       icon: Icons.play_circle_filled_rounded,
                       brandColor: AppColors.ytmRed,
+                      gradient: AppGradients.ytm,
                       isSelected: preferredPlatform == PlatformKind.ytm,
                       onTap: preferredPlatform == PlatformKind.ytm
                           ? null
@@ -586,6 +588,7 @@ class _PlatformTile extends StatelessWidget {
     required this.label,
     required this.icon,
     required this.brandColor,
+    required this.gradient,
     required this.isSelected,
     required this.onTap,
   });
@@ -593,6 +596,7 @@ class _PlatformTile extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color brandColor;
+  final Gradient gradient;
   final bool isSelected;
   final VoidCallback? onTap;
 
@@ -602,41 +606,77 @@ class _PlatformTile extends StatelessWidget {
 
     return GestureDetector(
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? brandColor.withValues(alpha: 0.15)
-              : (isDark ? const Color(0xFF1A1F26) : AppColors.surface),
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: isSelected
-                ? brandColor
-                : (isDark ? const Color(0xFF2D3541) : AppColors.border),
-            width: isSelected ? 1.5 : 1,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
+            decoration: BoxDecoration(
+              gradient: isSelected ? gradient : null,
+              color: isSelected
+                  ? null
+                  : (isDark ? const Color(0xFF1A1F26) : AppColors.surface),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(
+                color: isSelected
+                    ? brandColor.withValues(alpha: 0.9)
+                    : (isDark ? const Color(0xFF2D3541) : AppColors.border),
+                width: isSelected ? 1.4 : 1,
+              ),
+              boxShadow: isSelected ? AppShadows.soft : null,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  icon,
+                  color: isSelected ? Colors.white : brandColor,
+                  size: 20,
+                ),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: isSelected
+                          ? Colors.white
+                          : (isDark ? Colors.white : AppColors.textPrimary),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(icon, color: brandColor, size: 20),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
+          if (isSelected)
+            Positioned(
+              top: -6,
+              right: -6,
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                  boxShadow: AppShadows.soft,
+                ),
+                child: Container(
+                  margin: const EdgeInsets.all(3),
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: AppColors.textPrimary,
+                  ),
+                  child: const Icon(
+                    Icons.check_rounded,
+                    color: Colors.white,
+                    size: 12,
+                  ),
+                ),
               ),
             ),
-            if (isSelected) ...[
-              const SizedBox(width: 6),
-              Icon(Icons.check_rounded, color: brandColor, size: 16),
-            ],
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -662,56 +702,99 @@ class _ConnectTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isSpotify = brandColor == AppColors.spotifyGreen;
+    final gradient = isSpotify ? AppGradients.spotify : AppGradients.ytm;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
       onTap: isLoading ? null : onTap,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 12),
+        padding: const EdgeInsets.all(14),
+        height: 118,
         decoration: BoxDecoration(
+          gradient: isConnected ? gradient : null,
           color: isConnected
-              ? brandColor.withValues(alpha: 0.15)
+              ? null
               : (isDark ? const Color(0xFF1A1F26) : AppColors.surface),
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isConnected
-                ? brandColor
+                ? brandColor.withValues(alpha: 0.9)
                 : (isDark ? const Color(0xFF2D3541) : AppColors.border),
-            width: isConnected ? 1.5 : 1,
+            width: isConnected ? 1.4 : 1,
           ),
+          boxShadow: isConnected ? AppShadows.soft : null,
         ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: brandColor, size: 20),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                label,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600),
-                overflow: TextOverflow.ellipsis,
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  color: isConnected ? Colors.white : brandColor,
+                  size: 22,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: isConnected
+                          ? Colors.white
+                          : (isDark ? Colors.white : AppColors.textPrimary),
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (isConnected)
+                  const Icon(
+                    Icons.check_rounded,
+                    size: 18,
+                    color: Colors.black,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              isConnected ? 'Connected' : 'Not connected',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: isConnected
+                    ? Colors.white.withValues(alpha: 0.9)
+                    : (isDark
+                          ? const Color(0xFF6B7A8C)
+                          : AppColors.textSecondary),
+                fontWeight: FontWeight.w600,
               ),
             ),
-            const SizedBox(width: 6),
-            if (isLoading)
-              SizedBox(
-                width: 14,
-                height: 14,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: brandColor,
+            const Spacer(),
+            Row(
+              children: [
+                const Spacer(),
+                TextButton.icon(
+                  onPressed: isLoading ? null : onTap,
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: isConnected ? Colors.white : brandColor,
+                    textStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  icon: Icon(
+                    Icons.arrow_forward_rounded,
+                    size: 16,
+                    color: isConnected ? Colors.white : brandColor,
+                  ),
+                  label: const Text('Connect'),
                 ),
-              )
-            else if (isConnected)
-              Icon(Icons.check_rounded, color: brandColor, size: 16)
-            else
-              Icon(
-                Icons.arrow_forward_ios_rounded,
-                color: isDark ? const Color(0xFF6B7A8C) : AppColors.textMuted,
-                size: 12,
-              ),
+              ],
+            ),
           ],
         ),
       ),

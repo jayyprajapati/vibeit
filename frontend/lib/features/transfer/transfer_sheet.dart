@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design_system.dart';
 import '../../core/models/transfer.dart';
 import '../../providers.dart';
 import 'transfer_repository.dart';
@@ -132,7 +133,7 @@ class _TransferBottomSheetState extends ConsumerState<TransferBottomSheet> {
                 children: [
                   const Icon(
                     Icons.open_in_new_rounded,
-                    color: Colors.blueAccent,
+                    color: AppColors.accent,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
@@ -280,7 +281,7 @@ class _PreviewSummary extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.list_alt_rounded, color: Colors.blueAccent),
+              const Icon(Icons.list_alt_rounded, color: AppColors.accent),
               const SizedBox(width: 8),
               Text(
                 '${preview.toAdd.length} will be added · ${preview.skipped.length} skipped',
