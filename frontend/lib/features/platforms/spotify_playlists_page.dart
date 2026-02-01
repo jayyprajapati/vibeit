@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'platform_playlist_detail_page.dart';
 import 'platform_playlist_models.dart';
 import 'spotify_controller.dart';
+import '../../core/design_system.dart';
 
 class SpotifyPlaylistsPage extends ConsumerWidget {
   const SpotifyPlaylistsPage({super.key});
@@ -14,18 +15,17 @@ class SpotifyPlaylistsPage extends ConsumerWidget {
     final controller = ref.read(spotifyControllerProvider.notifier);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Your Spotify playlists')),
       body: RefreshIndicator(
         onRefresh: controller.load,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            const _GradientHeader(
-              title: 'Your Spotify playlists',
-              colors: [Color(0xFF1DB954), Color(0xFF1ED760)],
+            _HeroBanner(
+              title: 'Spotify Playlists',
+              gradient: AppHeroGradients.spotify,
             ),
             SliverPadding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
               sliver: state.when(
                 loading: () => const SliverToBoxAdapter(
                   child: Center(child: CircularProgressIndicator()),
@@ -91,76 +91,25 @@ class SpotifyPlaylistsPage extends ConsumerWidget {
                   return SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final playlist = items[index];
-                      final itemLabel =
-                          playlist.source == PlatformPlaylistSource.ytm
-                          ? 'items'
-                          : 'tracks';
-                      final updated = playlist.lastFetchedAt
-                          .toLocal()
-                          .toString()
-                          .split(' ')
-                          .first;
-
-                      return GestureDetector(
+                      return _PlaylistRow(
+                        playlist: playlist,
+                        iconColor: AppColors.spotifyGreen,
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
                             builder: (_) =>
                                 PlatformPlaylistDetailPage(playlist: playlist),
                           ),
                         ),
-                        child: Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Theme.of(context).cardColor,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Container(
-                                width: 46,
-                                height: 46,
-                                decoration: BoxDecoration(
-                                  color: playlist.source.accentColor.withValues(
-                                    alpha: 0.18,
-                                  ),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: const Icon(
-                                  Icons.music_note,
-                                  color: Colors.black,
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      playlist.name,
-                                      style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.w700,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      '${playlist.itemCount} $itemLabel · Updated $updated',
-                                      style: const TextStyle(
-                                        color: Colors.grey,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const Icon(
-                                Icons.arrow_forward_ios,
-                                size: 14,
-                                color: Colors.grey,
-                              ),
-                            ],
-                          ),
-                        ),
+                        onSync: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Sync coming soon')),
+                          );
+                        },
+                        onTransfer: () {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Transfer coming soon')),
+                          );
+                        },
                       );
                     }, childCount: items.length),
                   );
@@ -174,53 +123,167 @@ class SpotifyPlaylistsPage extends ConsumerWidget {
   }
 }
 
-class _GradientHeader extends StatelessWidget {
-  const _GradientHeader({required this.title, required this.colors});
+// ---------------------------------------------------------------------------
+// Hero Banner (15% of screen height)
+// ---------------------------------------------------------------------------
+
+class _HeroBanner extends StatelessWidget {
+  const _HeroBanner({required this.title, required this.gradient});
 
   final String title;
-  final List<Color> colors;
+  final LinearGradient gradient;
 
   @override
   Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * 0.15;
+
     return SliverToBoxAdapter(
       child: Container(
+        height: height + MediaQuery.of(context).padding.top,
         width: double.infinity,
-        padding: EdgeInsets.fromLTRB(
-          16,
-          MediaQuery.of(context).padding.top + 18,
-          16,
-          24,
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 16,
+          left: 20,
+          right: 20,
+          bottom: 16,
         ),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: colors,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+        decoration: BoxDecoration(gradient: gradient),
+        child: Align(
+          alignment: Alignment.bottomLeft,
+          child: Text(
+            title,
+            style: TextStyle(
+              color: AppColors.textPrimary,
+              fontSize: 26,
+              fontWeight: FontWeight.w700,
+            ),
           ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const SizedBox(height: kToolbarHeight),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Browse everything synced from your Spotify account.',
-              style: TextStyle(color: Colors.black87),
-            ),
-          ],
         ),
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Playlist Row (with sync/transfer icons)
+// ---------------------------------------------------------------------------
+
+class _PlaylistRow extends StatelessWidget {
+  const _PlaylistRow({
+    required this.playlist,
+    required this.iconColor,
+    required this.onTap,
+    this.onSync,
+    this.onTransfer,
+  });
+
+  final PlatformPlaylistSnapshot playlist;
+  final Color iconColor;
+  final VoidCallback onTap;
+  final VoidCallback? onSync;
+  final VoidCallback? onTransfer;
+
+  @override
+  Widget build(BuildContext context) {
+    final updated = playlist.lastFetchedAt.toLocal().toString().split(' ').first;
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 14),
+          padding: const EdgeInsets.all(16),
+          decoration: AppCardDecorations.row(context),
+          child: Row(
+            children: [
+              // Icon
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: iconColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(
+                  Icons.music_note_rounded,
+                  color: iconColor,
+                ),
+              ),
+              const SizedBox(width: 14),
+              // Info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      playlist.name,
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${playlist.itemCount} tracks · Updated $updated',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Actions
+              if (onSync != null)
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: onSync,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.sync_rounded,
+                        size: 22,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              if (onTransfer != null)
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: GestureDetector(
+                    onTap: onTransfer,
+                    child: Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.swap_horiz_rounded,
+                        size: 22,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ),
+                ),
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                size: 14,
+                color: AppColors.textMuted,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// List Message
+// ---------------------------------------------------------------------------
 
 class _ListMessage extends StatelessWidget {
   const _ListMessage({required this.message, this.actionLabel, this.onAction});
@@ -233,21 +296,29 @@ class _ListMessage extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
+      padding: const EdgeInsets.all(20),
+      decoration: AppCardDecorations.row(context),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.info_outline, color: Colors.grey),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(message, style: const TextStyle(color: Colors.grey)),
+          Row(
+            children: [
+              Icon(Icons.info_outline, color: AppColors.textMuted),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+            ],
           ),
           if (actionLabel != null && onAction != null) ...[
-            const SizedBox(width: 10),
-            TextButton(onPressed: onAction, child: Text(actionLabel!)),
+            const SizedBox(height: 12),
+            AppTextButton(label: actionLabel!, onTap: onAction!),
           ],
         ],
       ),

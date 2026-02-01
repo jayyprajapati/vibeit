@@ -1,28 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'platform_playlist_detail_page.dart';
-import 'platform_playlist_models.dart';
-import 'ytm_controller.dart';
+import 'playlist_controller.dart';
+import 'playlist_detail_screen.dart';
 import '../../core/design_system.dart';
 
-class YtmPlaylistsPage extends ConsumerWidget {
-  const YtmPlaylistsPage({super.key});
+class AppPlaylistsPage extends ConsumerWidget {
+  const AppPlaylistsPage({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(ytmControllerProvider);
-    final controller = ref.read(ytmControllerProvider.notifier);
+    final state = ref.watch(playlistControllerProvider);
+    final controller = ref.read(playlistControllerProvider.notifier);
 
     return Scaffold(
       body: RefreshIndicator(
-        onRefresh: controller.load,
+        onRefresh: controller.loadPlaylists,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
             _HeroBanner(
-              title: 'YouTube Music Playlists',
-              gradient: AppHeroGradients.ytm,
+              title: 'Your Playlists',
+              gradient: AppHeroGradients.app,
             ),
             SliverPadding(
               padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
@@ -34,71 +33,37 @@ class YtmPlaylistsPage extends ConsumerWidget {
                   child: _ListMessage(
                     message: err.toString(),
                     actionLabel: 'Retry',
-                    onAction: controller.load,
+                    onAction: controller.loadPlaylists,
                   ),
                 ),
-                data: (data) {
-                  if (!data.connected) {
-                    return SliverToBoxAdapter(
-                      child: _ListMessage(
-                        message:
-                            'Connect YouTube Music to browse playlists here.',
-                        actionLabel: 'Grant access',
-                        onAction: () async {
-                          try {
-                            await controller.startConnectFlow();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Finish YouTube Music login, then refresh.',
-                                  ),
-                                ),
-                              );
-                            }
-                          } catch (err) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text(err.toString())),
-                              );
-                            }
-                          }
-                        },
-                      ),
-                    );
-                  }
-
-                  final items = data.playlists
-                      .map(
-                        (p) => PlatformPlaylistSnapshot(
-                          id: p.id,
-                          name: p.name,
-                          itemCount: p.itemCount,
-                          lastFetchedAt: p.lastFetchedAt,
-                          source: PlatformPlaylistSource.ytm,
-                        ),
-                      )
-                      .toList();
-
-                  if (items.isEmpty) {
+                data: (playlists) {
+                  if (playlists.isEmpty) {
                     return const SliverToBoxAdapter(
                       child: _ListMessage(
                         message:
-                            'No YouTube Music playlists found yet. Try syncing again.',
+                            'No playlists yet. Create your first playlist to get started.',
                       ),
                     );
                   }
 
                   return SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
-                      final playlist = items[index];
+                      final playlist = playlists[index];
+                      final updated = playlist.updatedAt
+                          .toLocal()
+                          .toString()
+                          .split(' ')
+                          .first;
+
                       return _PlaylistRow(
-                        playlist: playlist,
-                        iconColor: AppColors.ytmRed,
+                        name: playlist.name,
+                        subtitle: '${playlist.tracks.length} tracks · Updated $updated',
                         onTap: () => Navigator.of(context).push(
                           MaterialPageRoute(
-                            builder: (_) =>
-                                PlatformPlaylistDetailPage(playlist: playlist),
+                            builder: (_) => PlaylistDetailScreen(
+                              playlistId: playlist.id,
+                              initialName: playlist.name,
+                            ),
                           ),
                         ),
                         onSync: () {
@@ -112,7 +77,7 @@ class YtmPlaylistsPage extends ConsumerWidget {
                           );
                         },
                       );
-                    }, childCount: items.length),
+                    }, childCount: playlists.length),
                   );
                 },
               ),
@@ -171,23 +136,21 @@ class _HeroBanner extends StatelessWidget {
 
 class _PlaylistRow extends StatelessWidget {
   const _PlaylistRow({
-    required this.playlist,
-    required this.iconColor,
+    required this.name,
+    required this.subtitle,
     required this.onTap,
     this.onSync,
     this.onTransfer,
   });
 
-  final PlatformPlaylistSnapshot playlist;
-  final Color iconColor;
+  final String name;
+  final String subtitle;
   final VoidCallback onTap;
   final VoidCallback? onSync;
   final VoidCallback? onTransfer;
 
   @override
   Widget build(BuildContext context) {
-    final updated = playlist.lastFetchedAt.toLocal().toString().split(' ').first;
-
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
@@ -203,12 +166,12 @@ class _PlaylistRow extends StatelessWidget {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.12),
+                  color: AppColors.surface,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
-                  Icons.play_circle_fill_rounded,
-                  color: iconColor,
+                  Icons.music_note_rounded,
+                  color: AppColors.textMuted,
                 ),
               ),
               const SizedBox(width: 14),
@@ -218,7 +181,7 @@ class _PlaylistRow extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      playlist.name,
+                      name,
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
@@ -229,7 +192,7 @@ class _PlaylistRow extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${playlist.itemCount} items · Updated $updated',
+                      subtitle,
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 14,

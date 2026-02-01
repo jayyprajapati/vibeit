@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../providers.dart';
+import '../../core/design_system.dart';
 import 'platform_playlist_models.dart';
 import 'spotify_controller.dart';
 import 'ytm_controller.dart';
@@ -59,7 +60,6 @@ class _PlatformPlaylistDetailPageState
         _loading = false;
       });
     } catch (err, st) {
-      // Keep trace visible if needed via AsyncError.
       if (!mounted) return;
       setState(() {
         _detail = AsyncValue.error(err, st);
@@ -69,9 +69,76 @@ class _PlatformPlaylistDetailPageState
     }
   }
 
+  LinearGradient get _heroGradient {
+    return widget.playlist.source == PlatformPlaylistSource.spotify
+        ? AppHeroGradients.spotify
+        : AppHeroGradients.ytm;
+  }
+
+  Color get _accentColor {
+    return widget.playlist.source == PlatformPlaylistSource.spotify
+        ? AppColors.spotifyGreen
+        : AppColors.ytmRed;
+  }
+
+  void _showTrackOptions(String title) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 20),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 18, color: AppColors.textMuted),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'More controls coming soon',
+                          style: TextStyle(
+                            color: AppColors.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final gradient = widget.playlist.source.gradient;
     final itemLabel = widget.playlist.source == PlatformPlaylistSource.ytm
         ? 'items'
         : 'tracks';
@@ -85,203 +152,102 @@ class _PlatformPlaylistDetailPageState
     final count = detail?.itemCount ?? widget.playlist.itemCount;
 
     return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        title: Text('${widget.playlist.source.label} playlist'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(
-              20,
-              MediaQuery.of(context).padding.top + kToolbarHeight,
-              20,
-              18,
+      body: RefreshIndicator(
+        onRefresh: _load,
+        child: CustomScrollView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          slivers: [
+            _HeroBanner(
+              title: detail?.name ?? widget.playlist.name,
+              subtitle: '$count $itemLabel · Updated $updated',
+              gradient: _heroGradient,
+              fromCache: detail?.fromCache == true,
             ),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: gradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
+            SliverPadding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
+              sliver: _buildBody(detail, itemLabel),
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Icon(
-                      widget.playlist.source == PlatformPlaylistSource.spotify
-                          ? Icons.music_note
-                          : Icons.play_circle_fill,
-                      color: Colors.black,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      widget.playlist.source.label,
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (detail?.fromCache == true)
-                      Container(
-                        margin: const EdgeInsets.only(left: 10),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: const Text(
-                          'Cached',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                Text(
-                  detail?.name ?? widget.playlist.name,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '$count $itemLabel · Updated $updated',
-                  style: const TextStyle(color: Colors.black87),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _load,
-              child: _buildBody(detail, itemLabel),
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildBody(PlatformPlaylistDetail? detail, String itemLabel) {
     if (_loading) {
-      return const Center(child: CircularProgressIndicator());
+      return const SliverToBoxAdapter(
+        child: Center(child: CircularProgressIndicator()),
+      );
     }
 
     if (_error != null) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: [_ErrorState(message: _error!, onRetry: _load)],
+      return SliverToBoxAdapter(
+        child: _ErrorState(message: _error!, onRetry: _load),
       );
     }
 
     if (detail == null) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: const [Text('No data available.')],
+      return const SliverToBoxAdapter(
+        child: Text('No data available.'),
       );
     }
 
     if (detail.tracks.isEmpty) {
-      return ListView(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
-        children: [
-          Text(
-            'No $itemLabel found for this playlist yet.',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+      return SliverToBoxAdapter(
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: AppCardDecorations.row(context),
+          child: Column(
+            children: [
+              Icon(
+                Icons.music_off_rounded,
+                size: 40,
+                color: AppColors.textMuted,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'No $itemLabel found',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Try refreshing to pull the latest tracks.',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: AppColors.textSecondary),
+              ),
+            ],
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Try refreshing to pull the latest tracks from the source.',
-            style: TextStyle(color: Colors.grey),
-          ),
-        ],
+        ),
       );
     }
 
-    return ListView.separated(
-      physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
-      itemBuilder: (context, index) {
-        final track = detail.tracks[index];
-        final duration = track.durationSeconds;
-        final durationLabel = duration != null && duration > 0
-            ? _formatDuration(Duration(seconds: duration))
-            : null;
+    return SliverList(
+      delegate: SliverChildBuilderDelegate(
+        (context, index) {
+          final track = detail.tracks[index];
+          final duration = track.durationSeconds;
+          final durationLabel = duration != null && duration > 0
+              ? _formatDuration(Duration(seconds: duration))
+              : '';
 
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: widget.playlist.source.accentColor.withValues(
-                    alpha: 0.14,
-                  ),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Icon(
-                  Icons.music_note,
-                  color: widget.playlist.source.accentColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      track.artist,
-                      style: const TextStyle(color: Colors.grey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              if (durationLabel != null) ...[
-                const SizedBox(width: 10),
-                Text(durationLabel, style: const TextStyle(color: Colors.grey)),
-              ],
-            ],
-          ),
-        );
-      },
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemCount: detail.tracks.length,
+          return _SongRow(
+            title: track.title,
+            subtitle: '${track.artist}${durationLabel.isNotEmpty ? ' · $durationLabel' : ''}',
+            iconColor: _accentColor,
+            onPlay: () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Connect a music app to play')),
+              );
+            },
+            onOptions: () => _showTrackOptions(track.title),
+          );
+        },
+        childCount: detail.tracks.length,
+      ),
     );
   }
 
@@ -292,6 +258,206 @@ class _PlatformPlaylistDetailPageState
   }
 }
 
+// ---------------------------------------------------------------------------
+// Hero Banner (15% of screen height)
+// ---------------------------------------------------------------------------
+
+class _HeroBanner extends StatelessWidget {
+  const _HeroBanner({
+    required this.title,
+    required this.subtitle,
+    required this.gradient,
+    this.fromCache = false,
+  });
+
+  final String title;
+  final String subtitle;
+  final LinearGradient gradient;
+  final bool fromCache;
+
+  @override
+  Widget build(BuildContext context) {
+    final height = MediaQuery.of(context).size.height * 0.15;
+
+    return SliverToBoxAdapter(
+      child: Container(
+        height: height + MediaQuery.of(context).padding.top,
+        width: double.infinity,
+        padding: EdgeInsets.only(
+          top: MediaQuery.of(context).padding.top + 16,
+          left: 20,
+          right: 20,
+          bottom: 16,
+        ),
+        decoration: BoxDecoration(gradient: gradient),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 24,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                if (fromCache)
+                  Container(
+                    margin: const EdgeInsets.only(left: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.textMuted.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      'Cached',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontWeight: FontWeight.w600,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Song Row (with play and options icons)
+// ---------------------------------------------------------------------------
+
+class _SongRow extends StatelessWidget {
+  const _SongRow({
+    required this.title,
+    required this.subtitle,
+    required this.iconColor,
+    required this.onPlay,
+    required this.onOptions,
+  });
+
+  final String title;
+  final String subtitle;
+  final Color iconColor;
+  final VoidCallback onPlay;
+  final VoidCallback onOptions;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(14),
+        decoration: AppCardDecorations.row(context),
+        child: Row(
+          children: [
+            // Album art placeholder
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: iconColor.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(
+                Icons.music_note_rounded,
+                color: iconColor,
+                size: 24,
+              ),
+            ),
+            const SizedBox(width: 14),
+            // Song info
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 13,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            // Play button
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: onPlay,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.play_circle_outline_rounded,
+                    size: 28,
+                    color: AppColors.accent,
+                  ),
+                ),
+              ),
+            ),
+            // Options menu
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: GestureDetector(
+                onTap: onOptions,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.more_horiz_rounded,
+                    size: 24,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Error State
+// ---------------------------------------------------------------------------
+
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
 
@@ -301,26 +467,28 @@ class _ErrorState extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-      ),
+      padding: const EdgeInsets.all(24),
+      decoration: AppCardDecorations.row(context),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Could not load this playlist.',
-            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
+          Icon(Icons.error_outline, size: 48, color: Colors.orange),
+          const SizedBox(height: 16),
+          Text(
+            'Could not load playlist',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
-          const SizedBox(height: 6),
-          Text(message, style: const TextStyle(color: Colors.grey)),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              TextButton(onPressed: onRetry, child: const Text('Retry')),
-            ],
+          const SizedBox(height: 8),
+          Text(
+            message,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary),
           ),
+          const SizedBox(height: 20),
+          AppTextButton(label: 'Retry', onTap: onRetry),
         ],
       ),
     );

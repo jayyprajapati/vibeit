@@ -270,3 +270,158 @@ class AppShadows {
     ),
   ];
 }
+
+/// Light gradient backgrounds for platform hero sections
+class AppHeroGradients {
+  static const spotify = LinearGradient(
+    colors: [Color(0xFFDCFCE7), Color(0xFFBBF7D0)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const ytm = LinearGradient(
+    colors: [Color(0xFFFEE2E2), Color(0xFFFECACA)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  /// Playful neutral — warm purple-lavender tint (NOT blue)
+  static const app = LinearGradient(
+    colors: [Color(0xFFF5F3FF), Color(0xFFEDE9FE)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+}
+
+/// Playful soft gradients for card title areas
+class AppCardTitleGradients {
+  static const playful = LinearGradient(
+    colors: [Color(0xFFFDF4FF), Color(0xFFFAE8FF)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const spotify = LinearGradient(
+    colors: [Color(0xFFECFDF5), Color(0xFFD1FAE5)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
+  static const ytm = LinearGradient(
+    colors: [Color(0xFFFEF2F2), Color(0xFFFEE2E2)],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+}
+
+/// Clean card container for dashboard playlist cards
+class AppCardDecorations {
+  static BoxDecoration clean(BuildContext context) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(14),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.05),
+          blurRadius: 10,
+          spreadRadius: 0,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    );
+  }
+
+  /// Playlist row decoration with subtle shadow
+  static BoxDecoration row(BuildContext context) {
+    return BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(12),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withValues(alpha: 0.04),
+          blurRadius: 8,
+          spreadRadius: 0,
+          offset: const Offset(0, 2),
+        ),
+      ],
+    );
+  }
+}
+
+/// Text button with hover background reveal (no underline)
+class AppTextButton extends StatefulWidget {
+  const AppTextButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+    this.icon,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+  final IconData? icon;
+
+  @override
+  State<AppTextButton> createState() => _AppTextButtonState();
+}
+
+class _AppTextButtonState extends State<AppTextButton> {
+  bool _hovering = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: _hovering
+                ? AppColors.accent.withValues(alpha: 0.08)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (widget.icon != null) ...[
+                Icon(widget.icon, size: 18, color: AppColors.accent),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                widget.label,
+                style: GoogleFonts.spaceGrotesk(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.accent,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Backwards compatibility alias
+class AppLinkButton extends StatelessWidget {
+  const AppLinkButton({
+    super.key,
+    required this.label,
+    required this.onTap,
+  });
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return AppTextButton(label: label, onTap: onTap);
+  }
+}
+
