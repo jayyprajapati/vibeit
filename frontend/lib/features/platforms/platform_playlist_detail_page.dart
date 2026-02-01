@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/design_system.dart';
 import '../../providers.dart';
 import 'platform_playlist_models.dart';
+import 'playlist_hero_banner.dart';
 import 'spotify_controller.dart';
 import 'ytm_controller.dart';
 
@@ -71,60 +73,46 @@ class _PlatformPlaylistDetailPageState
 
   @override
   Widget build(BuildContext context) {
-    final gradient = widget.playlist.source.gradient;
-    final itemLabel = widget.playlist.source == PlatformPlaylistSource.ytm
-        ? 'items'
-        : 'tracks';
-
-    final detail = _detail?.valueOrNull;
-    final updated = (detail?.lastFetchedAt ?? widget.playlist.lastFetchedAt)
-        .toLocal()
-        .toString()
-        .split(' ')
-        .first;
-    final count = detail?.itemCount ?? widget.playlist.itemCount;
-
     return Scaffold(
-      extendBodyBehindAppBar: true,
       appBar: AppBar(
-        title: Text('${widget.playlist.source.label} playlist'),
+        title: const SizedBox.shrink(),
         backgroundColor: Colors.transparent,
         elevation: 0,
+        foregroundColor: AppColors.textPrimary,
       ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            padding: EdgeInsets.fromLTRB(
-              20,
-              MediaQuery.of(context).padding.top + kToolbarHeight,
-              20,
-              18,
-            ),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
+      body: Builder(
+        builder: (context) {
+          final detail = _detail?.valueOrNull;
+          final gradient = widget.playlist.source.gradient;
+          final itemLabel = widget.playlist.source == PlatformPlaylistSource.ytm
+              ? 'items'
+              : 'tracks';
+          final updated =
+              (detail?.lastFetchedAt ?? widget.playlist.lastFetchedAt)
+                  .toLocal()
+                  .toString()
+                  .split(' ')
+                  .first;
+          final count = detail?.itemCount ?? widget.playlist.itemCount;
+
+          return Column(
+            children: [
+              PlaylistHeroBanner(
+                title: detail?.name ?? widget.playlist.name,
                 colors: gradient,
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
+                icon: widget.playlist.source == PlatformPlaylistSource.spotify
+                    ? Icons.music_note
+                    : Icons.play_circle_fill,
               ),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+                child: Row(
                   children: [
-                    Icon(
-                      widget.playlist.source == PlatformPlaylistSource.spotify
-                          ? Icons.music_note
-                          : Icons.play_circle_fill,
-                      color: Colors.black,
-                    ),
-                    const SizedBox(width: 8),
                     Text(
-                      widget.playlist.source.label,
+                      '$count $itemLabel · Updated $updated',
                       style: const TextStyle(
-                        color: Colors.black,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     if (detail?.fromCache == true)
@@ -135,7 +123,7 @@ class _PlatformPlaylistDetailPageState
                           vertical: 4,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.black.withValues(alpha: 0.08),
+                          color: Colors.black.withValues(alpha: 0.06),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: const Text(
@@ -149,30 +137,16 @@ class _PlatformPlaylistDetailPageState
                       ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  detail?.name ?? widget.playlist.name,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.black,
-                  ),
+              ),
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: _load,
+                  child: _buildBody(detail, itemLabel),
                 ),
-                const SizedBox(height: 6),
-                Text(
-                  '$count $itemLabel · Updated $updated',
-                  style: const TextStyle(color: Colors.black87),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: RefreshIndicator(
-              onRefresh: _load,
-              child: _buildBody(detail, itemLabel),
-            ),
-          ),
-        ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -205,12 +179,15 @@ class _PlatformPlaylistDetailPageState
         children: [
           Text(
             'No $itemLabel found for this playlist yet.',
-            style: const TextStyle(fontWeight: FontWeight.w600),
+            style: const TextStyle(
+              fontWeight: FontWeight.w600,
+              color: AppColors.textPrimary,
+            ),
           ),
           const SizedBox(height: 8),
           const Text(
             'Try refreshing to pull the latest tracks from the source.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: AppColors.textPrimary),
           ),
         ],
       );
@@ -226,57 +203,85 @@ class _PlatformPlaylistDetailPageState
             ? _formatDuration(Duration(seconds: duration))
             : null;
 
-        return Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: Theme.of(context).cardColor,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Row(
-            children: [
-              Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  color: widget.playlist.source.accentColor.withValues(
-                    alpha: 0.14,
+        return MouseRegion(
+          cursor: SystemMouseCursors.click,
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: AppShadows.card,
+            ),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: widget.playlist.source.accentColor.withValues(
+                      alpha: 0.14,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  borderRadius: BorderRadius.circular(10),
+                  child: Icon(
+                    Icons.music_note,
+                    color: widget.playlist.source.accentColor,
+                  ),
                 ),
-                child: Icon(
-                  Icons.music_note,
-                  color: widget.playlist.source.accentColor,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      track.title,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w700,
-                        fontSize: 15,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        track.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                          color: AppColors.textPrimary,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      track.artist,
-                      style: const TextStyle(color: Colors.grey),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        track.artist,
+                        style: const TextStyle(color: AppColors.textPrimary),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              if (durationLabel != null) ...[
-                const SizedBox(width: 10),
-                Text(durationLabel, style: const TextStyle(color: Colors.grey)),
+                if (durationLabel != null) ...[
+                  const SizedBox(width: 10),
+                  Text(
+                    durationLabel,
+                    style: const TextStyle(color: AppColors.textPrimary),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: IconButton(
+                    tooltip: 'Play',
+                    onPressed: () => _playTrack(track),
+                    icon: Icon(
+                      Icons.play_arrow_rounded,
+                      color: widget.playlist.source.accentColor,
+                    ),
+                  ),
+                ),
+                MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  child: IconButton(
+                    tooltip: 'More options',
+                    onPressed: () => _showMoreOptions(context),
+                    icon: const Icon(Icons.more_horiz),
+                  ),
+                ),
               ],
-            ],
+            ),
           ),
         );
       },
@@ -289,6 +294,40 @@ class _PlatformPlaylistDetailPageState
     final minutes = duration.inMinutes;
     final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$minutes:$seconds';
+  }
+
+  void _playTrack(PlatformPlaylistTrack track) {
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('Playing ${track.title}...')));
+  }
+
+  void _showMoreOptions(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Theme.of(context).colorScheme.surface,
+      builder: (_) {
+        return Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: const [
+              Text(
+                'More controls coming soon',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              SizedBox(height: 10),
+              Text('We are adding more actions for these tracks.'),
+            ],
+          ),
+        );
+      },
+    );
   }
 }
 

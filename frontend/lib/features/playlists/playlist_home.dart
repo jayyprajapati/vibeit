@@ -5,6 +5,7 @@ import 'playlist_controller.dart';
 import 'playlist_detail_screen.dart';
 import '../../core/models/playlist.dart';
 import '../../core/models/transfer.dart';
+import '../../core/design_system.dart';
 import '../platforms/platform_playlist_models.dart';
 import '../platforms/platform_playlist_detail_page.dart';
 import '../platforms/spotify_controller.dart';
@@ -404,19 +405,19 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
             spotifyState,
             ytmState,
           ),
-          const SizedBox(height: 26),
+          const SizedBox(height: 30),
           const _SectionHeading(
             title: 'Spotify playlists',
             subtitle: 'Browse without switching apps.',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _buildSpotifySection(spotifyState),
-          const SizedBox(height: 26),
+          const SizedBox(height: 30),
           const _SectionHeading(
             title: 'YouTube Music playlists',
             subtitle: 'Stay close to your YTM library.',
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 12),
           _buildYtmSection(ytmState),
         ],
       ),
@@ -619,33 +620,51 @@ class _EmptyVibeitState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        const Icon(Icons.library_music_outlined, size: 40, color: Colors.grey),
-        const SizedBox(width: 14),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: const [
-              Text(
-                'Create your first playlist',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+    return SizedBox(
+      width: double.infinity,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            const Icon(
+              Icons.library_music_outlined,
+              size: 48,
+              color: Colors.grey,
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'Create your first playlist',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Build a mix and start adding tracks.',
+              style: TextStyle(color: Colors.grey),
+            ),
+            const SizedBox(height: 14),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: TextButton.icon(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 10,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  foregroundColor: AppColors.textPrimary,
+                  overlayColor: AppColors.textPrimary.withValues(alpha: 0.06),
+                ),
+                onPressed: onCreate,
+                icon: const Icon(Icons.add),
+                label: const Text('Create'),
               ),
-              SizedBox(height: 4),
-              Text(
-                'Build a mix and start adding tracks.',
-                style: TextStyle(color: Colors.grey),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
-        const SizedBox(width: 10),
-        ElevatedButton.icon(
-          onPressed: onCreate,
-          icon: const Icon(Icons.add),
-          label: const Text('Create'),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -670,64 +689,90 @@ class _VibeitPlaylistCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final updated = playlist.updatedAt.toLocal().toString().split(' ').first;
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(14),
-      child: Ink(
-        width: 240,
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor,
-          borderRadius: BorderRadius.circular(14),
-        ),
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              playlist.name,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              '${playlist.tracks.length} tracks · Updated $updated',
-              style: const TextStyle(color: Colors.grey),
-            ),
-            const Spacer(),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                if (onSync != null)
-                  OutlinedButton.icon(
-                    onPressed: onSync,
-                    icon: const Icon(Icons.sync_alt_rounded, size: 18),
-                    label: const Text('Sync'),
-                    style: OutlinedButton.styleFrom(
-                      minimumSize: const Size(0, 38),
-                    ),
-                  ),
-                if (onTransfer != null)
-                  ElevatedButton.icon(
-                    onPressed: onTransfer,
-                    icon: const Icon(Icons.open_in_new_rounded, size: 18),
-                    label: Text(transferLabel ?? 'Transfer'),
-                    style: ElevatedButton.styleFrom(
-                      minimumSize: const Size(0, 38),
-                    ),
-                  ),
-                IconButton(
-                  onPressed: onDelete,
-                  icon: const Icon(
-                    Icons.delete_outline,
-                    color: Colors.redAccent,
-                  ),
-                  tooltip: 'Delete playlist',
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          width: 240,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: AppShadows.card,
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
                 ),
-              ],
-            ),
-          ],
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFFFDF4FF), Color(0xFFE3F2FF)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  playlist.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                '${playlist.tracks.length} tracks · Updated $updated',
+                style: const TextStyle(color: AppColors.textPrimary),
+              ),
+              const Spacer(),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (onSync != null)
+                    OutlinedButton.icon(
+                      onPressed: onSync,
+                      icon: const Icon(Icons.sync_alt_rounded, size: 18),
+                      label: const Text('Sync'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size(0, 38),
+                      ),
+                    ),
+                  if (onTransfer != null)
+                    ElevatedButton.icon(
+                      onPressed: onTransfer,
+                      icon: const Icon(Icons.open_in_new_rounded, size: 18),
+                      label: Text(transferLabel ?? 'Transfer'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size(0, 38),
+                      ),
+                    ),
+                  MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    child: IconButton(
+                      onPressed: onDelete,
+                      icon: const Icon(
+                        Icons.delete_outline,
+                        color: Colors.redAccent,
+                      ),
+                      tooltip: 'Delete playlist',
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -763,14 +808,28 @@ class _PlatformCarousel extends StatelessWidget {
                 style: const TextStyle(color: Colors.grey),
               ),
             ),
-            TextButton(onPressed: onShowMore, child: const Text('Show more')),
+            MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: TextButton(
+                onPressed: onShowMore,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 10,
+                  ),
+                  foregroundColor: AppColors.textPrimary,
+                  overlayColor: AppColors.textPrimary.withValues(alpha: 0.08),
+                ),
+                child: const Text('Show more'),
+              ),
+            ),
           ],
         ),
       );
     }
 
     return SizedBox(
-      height: 170,
+      height: 180,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -785,7 +844,7 @@ class _PlatformCarousel extends StatelessWidget {
             onTap: () => onOpen(playlist),
           );
         },
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        separatorBuilder: (_, __) => const SizedBox(width: 14),
         itemCount: items.length + 1,
       ),
     );
@@ -810,73 +869,92 @@ class _PlatformPlaylistCard extends StatelessWidget {
         .split(' ')
         .first;
 
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 220,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            colors: gradient,
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+    final softGradient = gradient
+        .map((color) => color.withValues(alpha: 0.22))
+        .toList(growable: false);
+
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: 220,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: AppShadows.card,
           ),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(
-                  playlist.source == PlatformPlaylistSource.spotify
-                      ? Icons.music_note
-                      : Icons.play_circle_fill,
-                  color: Colors.black,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
                 ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    playlist.source.label,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w700,
-                    ),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: softGradient,
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              playlist.name,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w800,
-                color: Colors.black,
+                child: Row(
+                  children: [
+                    Icon(
+                      playlist.source == PlatformPlaylistSource.spotify
+                          ? Icons.music_note
+                          : Icons.play_circle_fill,
+                      color: Colors.black,
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        playlist.source.label,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Colors.black,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const Icon(Icons.arrow_forward_ios, size: 14),
+                  ],
+                ),
               ),
-            ),
-            const Spacer(),
-            Text(
-              '${playlist.itemCount} $itemLabel',
-              style: const TextStyle(
-                color: Colors.black87,
-                fontWeight: FontWeight.w600,
+              const SizedBox(height: 10),
+              Text(
+                playlist.name,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary,
+                ),
               ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Updated $updated',
-              style: const TextStyle(color: Colors.black87),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+              const Spacer(),
+              Text(
+                '${playlist.itemCount} $itemLabel',
+                style: const TextStyle(
+                  color: AppColors.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Updated $updated',
+                style: const TextStyle(color: AppColors.textPrimary),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -890,24 +968,27 @@ class _ShowMoreCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(14),
-      child: Ink(
-        width: 160,
-        decoration: BoxDecoration(
-          color: Theme.of(context).cardColor.withValues(alpha: 0.35),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.grey.shade700),
-        ),
-        child: const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(Icons.arrow_forward, color: Colors.grey),
-              SizedBox(height: 6),
-              Text('Show more'),
-            ],
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Ink(
+          width: 160,
+          decoration: BoxDecoration(
+            color: Theme.of(context).cardColor,
+            borderRadius: BorderRadius.circular(14),
+            boxShadow: AppShadows.card,
+          ),
+          child: const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.arrow_forward, color: Colors.grey),
+                SizedBox(height: 6),
+                Text('Show more'),
+              ],
+            ),
           ),
         ),
       ),
