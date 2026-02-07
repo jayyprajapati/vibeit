@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'platform_playlist_detail_page.dart';
 import 'platform_playlist_models.dart';
 import 'ytm_controller.dart';
-import 'playlist_hero_banner.dart';
+import 'playlist_hero_banner.dart' as hero;
 import 'spotify_controller.dart';
 import '../../core/design_system.dart';
 
@@ -18,22 +18,32 @@ class YtmPlaylistsPage extends ConsumerWidget {
     final spotifyState = ref.watch(spotifyControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const SizedBox.shrink(),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppColors.textPrimary,
-      ),
       body: RefreshIndicator(
         onRefresh: controller.load,
         child: CustomScrollView(
           physics: const AlwaysScrollableScrollPhysics(),
           slivers: [
-            const SliverToBoxAdapter(
-              child: PlaylistHeroBanner(
-                title: 'YouTube Music Playlists',
-                colors: [Color(0xFFEA4335), Color(0xFFF28B82)],
-                icon: Icons.play_circle_fill,
+            SliverPersistentHeader(
+              pinned: true,
+              delegate: _PinnedHeroHeader(
+                height: 140,
+                child: hero.PlaylistHeroBanner(
+                  title: 'YouTube Music Playlists',
+                  colors: const [Color(0xFFEA4335), Color(0xFFF28B82)],
+                  showBack: true,
+                  textColor: Colors.white,
+                  helperText: state.maybeWhen(
+                    data: (data) {
+                      final first = data.playlists.isNotEmpty
+                          ? data.playlists.first.lastFetchedAt
+                          : null;
+                      if (first == null) return null;
+                      final label = first.toLocal().toString().split(' ').first;
+                      return 'Last synced $label';
+                    },
+                    orElse: () => null,
+                  ),
+                ),
               ),
             ),
             SliverPadding(
@@ -108,11 +118,6 @@ class YtmPlaylistsPage extends ConsumerWidget {
                           playlist.source == PlatformPlaylistSource.ytm
                           ? 'items'
                           : 'tracks';
-                      final updated = playlist.lastFetchedAt
-                          .toLocal()
-                          .toString()
-                          .split(' ')
-                          .first;
                       final canTransfer =
                           spotifyState.valueOrNull?.connected == true;
                       final canSync = canTransfer;
@@ -134,12 +139,18 @@ class YtmPlaylistsPage extends ConsumerWidget {
                             ),
                           ),
                           child: Container(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            padding: const EdgeInsets.all(14),
+                            margin: const EdgeInsets.only(bottom: 18),
+                            padding: const EdgeInsets.all(16),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(14),
-                              boxShadow: AppShadows.card,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 18,
+                                  offset: const Offset(0, 10),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
@@ -172,9 +183,9 @@ class YtmPlaylistsPage extends ConsumerWidget {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        '${playlist.itemCount} $itemLabel · Updated $updated',
+                                        '${playlist.itemCount} $itemLabel',
                                         style: const TextStyle(
-                                          color: AppColors.textPrimary,
+                                          color: AppColors.textSecondary,
                                         ),
                                       ),
                                     ],
@@ -188,7 +199,7 @@ class YtmPlaylistsPage extends ConsumerWidget {
                                       onPressed: () =>
                                           showToast('Sync coming soon'),
                                       icon: Icon(
-                                        Icons.sync_alt,
+                                        Icons.autorenew_rounded,
                                         color: playlist.source.accentColor,
                                       ),
                                     ),
@@ -201,11 +212,12 @@ class YtmPlaylistsPage extends ConsumerWidget {
                                       onPressed: () =>
                                           showToast('Transfer coming soon'),
                                       icon: const Icon(
-                                        Icons.open_in_new,
+                                        Icons.arrow_outward_rounded,
                                         color: AppColors.textPrimary,
                                       ),
                                     ),
                                   ),
+                                const SizedBox(width: 4),
                                 const MouseRegion(
                                   cursor: SystemMouseCursors.click,
                                   child: Icon(
@@ -261,5 +273,32 @@ class _ListMessage extends StatelessWidget {
         ],
       ),
     );
+  }
+}
+
+class _PinnedHeroHeader extends SliverPersistentHeaderDelegate {
+  _PinnedHeroHeader({required this.child, required this.height});
+
+  final Widget child;
+  final double height;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedHeroHeader oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
   }
 }

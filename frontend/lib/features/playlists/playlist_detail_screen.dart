@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/design_system.dart';
-import '../platforms/playlist_hero_banner.dart';
+import '../platforms/playlist_hero_banner.dart' as hero;
 
 import 'playlist_controller.dart';
 import 'track_search_screen.dart';
@@ -67,56 +67,60 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
     final detail = ref.watch(playlistDetailProvider(widget.playlistId));
 
     return Scaffold(
-      appBar: AppBar(
-        title: const SizedBox.shrink(),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        foregroundColor: AppColors.textPrimary,
-      ),
-      body: SafeArea(
-        child: detail.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (err, _) => Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Playlist',
-                  style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 12),
-                Text('Could not load playlist: $err'),
-                const SizedBox(height: 12),
-                ElevatedButton.icon(
-                  onPressed: () =>
-                      ref.refresh(playlistDetailProvider(widget.playlistId)),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                ),
-              ],
-            ),
+      body: detail.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (err, _) => Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Playlist',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: 12),
+              Text('Could not load playlist: $err'),
+              const SizedBox(height: 12),
+              ElevatedButton.icon(
+                onPressed: () =>
+                    ref.refresh(playlistDetailProvider(widget.playlistId)),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
+              ),
+            ],
           ),
-          data: (playlist) => RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(playlistDetailProvider(widget.playlistId));
-              await ref.read(playlistDetailProvider(widget.playlistId).future);
-            },
-            child: ListView(
-              padding: const EdgeInsets.only(bottom: 24),
-              children: [
-                PlaylistHeroBanner(
-                  title: playlist.name,
-                  colors: const [Color(0xFFFFE6F7), Color(0xFFE6FFF4)],
-                  icon: Icons.queue_music,
+        ),
+        data: (playlist) => RefreshIndicator(
+          onRefresh: () async {
+            ref.invalidate(playlistDetailProvider(widget.playlistId));
+            await ref.read(playlistDetailProvider(widget.playlistId).future);
+          },
+          child: CustomScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            slivers: [
+              SliverPersistentHeader(
+                pinned: true,
+                delegate: _PinnedHeroHeader(
+                  height: 140,
+                  child: hero.PlaylistHeroBanner(
+                    title: playlist.name,
+                    colors: const [Color(0xFF1E4ED8), Color(0xFF5B8CFF)],
+                    showBack: true,
+                    textColor: Colors.white,
+                    helperText:
+                        'Created ${playlist.createdAt.toLocal().toString().split(' ').first}',
+                    badgeLabel: null,
+                  ),
                 ),
-                Padding(
+              ),
+              SliverToBoxAdapter(
+                child: Padding(
                   padding: const EdgeInsets.fromLTRB(24, 18, 24, 0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        '${playlist.tracks.length} tracks · Created ${playlist.createdAt.toLocal().toString().split(' ').first}',
+                        '${playlist.tracks.length} tracks',
                         style: const TextStyle(color: AppColors.textPrimary),
                       ),
                       const SizedBox(height: 16),
@@ -135,7 +139,13 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(14),
-                            boxShadow: AppShadows.card,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.08),
+                                blurRadius: 18,
+                                offset: const Offset(0, 10),
+                              ),
+                            ],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.center,
@@ -152,13 +162,15 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                 style: TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
-                                  color: AppColors.textPrimary,
+                                  color: AppColors.textSecondary,
                                 ),
                               ),
                               SizedBox(height: 6),
                               Text(
                                 'Add a track using the search above.',
-                                style: TextStyle(color: AppColors.textPrimary),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
                             ],
                           ),
@@ -168,12 +180,18 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                           (track) => MouseRegion(
                             cursor: SystemMouseCursors.click,
                             child: Container(
-                              margin: const EdgeInsets.only(bottom: 14),
-                              padding: const EdgeInsets.all(12),
+                              margin: const EdgeInsets.only(bottom: 16),
+                              padding: const EdgeInsets.all(16),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(14),
-                                boxShadow: AppShadows.card,
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.08),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
                               ),
                               child: Row(
                                 children: [
@@ -181,11 +199,11 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                     tooltip: 'Play',
                                     onPressed: () => _playTrack(track.title),
                                     icon: Icon(
-                                      Icons.play_arrow_rounded,
+                                      Icons.play_circle_fill_rounded,
                                       color: Theme.of(context).primaryColor,
                                     ),
                                   ),
-                                  const SizedBox(width: 6),
+                                  const SizedBox(width: 8),
                                   Expanded(
                                     child: Column(
                                       crossAxisAlignment:
@@ -215,6 +233,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                       color: AppColors.textPrimary,
                                     ),
                                   ),
+                                  const SizedBox(width: 8),
                                   MouseRegion(
                                     cursor: SystemMouseCursors.click,
                                     child: IconButton(
@@ -224,6 +243,7 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                                       icon: const Icon(Icons.more_horiz),
                                     ),
                                   ),
+                                  const SizedBox(width: 4),
                                   MouseRegion(
                                     cursor: SystemMouseCursors.click,
                                     child: IconButton(
@@ -249,8 +269,8 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
                     ],
                   ),
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -289,5 +309,32 @@ class _PlaylistDetailScreenState extends ConsumerState<PlaylistDetailScreen> {
         );
       },
     );
+  }
+}
+
+class _PinnedHeroHeader extends SliverPersistentHeaderDelegate {
+  _PinnedHeroHeader({required this.child, required this.height});
+
+  final Widget child;
+  final double height;
+
+  @override
+  double get minExtent => height;
+
+  @override
+  double get maxExtent => height;
+
+  @override
+  Widget build(
+    BuildContext context,
+    double shrinkOffset,
+    bool overlapsContent,
+  ) {
+    return child;
+  }
+
+  @override
+  bool shouldRebuild(covariant _PinnedHeroHeader oldDelegate) {
+    return oldDelegate.height != height || oldDelegate.child != child;
   }
 }
