@@ -201,6 +201,11 @@ class YtmController extends StateNotifier<AsyncValue<YtmState>> {
     }
   }
 
+  /// Clears all state. Called on logout to prevent state leaking between users.
+  void clearState() {
+    state = AsyncValue.data(YtmState.initial());
+  }
+
   String _requireToken() {
     final token = _token;
     if (token == null) {

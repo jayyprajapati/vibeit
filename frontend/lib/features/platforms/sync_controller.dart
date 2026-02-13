@@ -116,6 +116,11 @@ class SyncController extends StateNotifier<SyncState> {
     state = state.copyWith(clearPermission: true, clearMessage: true);
   }
 
+  /// Clears all state. Called on logout to prevent state leaking between users.
+  void clearState() {
+    state = SyncState.initial();
+  }
+
   Future<bool> previewSync() async {
     final token = _requireToken();
     final playlist = state.selectedPlaylist;

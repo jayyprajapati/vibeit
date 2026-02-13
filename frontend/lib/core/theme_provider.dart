@@ -37,6 +37,14 @@ class ThemeModeNotifier extends StateNotifier<AppThemeMode> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_key, mode.name);
   }
+
+  /// Resets theme to default (light) and clears stored preference.
+  /// Called on logout to prevent theme leaking between users.
+  Future<void> resetToDefault() async {
+    state = AppThemeMode.light;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_key);
+  }
 }
 
 /// Convert AppThemeMode to Flutter ThemeMode

@@ -8,6 +8,7 @@ import ytmRoutes from "./routes/ytmRoutes";
 import syncRoutes from "./routes/syncRoutes";
 import transferRoutes from "./routes/transferRoutes";
 import exploreRoutes from "./routes/exploreRoutes";
+import preferencesRoutes from "./routes/preferencesRoutes";
 import { authMiddleware } from "./middleware/authMiddleware";
 import { getMe, getPlatformAccess } from "./controllers/authController";
 
@@ -23,6 +24,7 @@ app.get("/health", (_: Request, res: Response) => {
 app.use("/auth", authRoutes);
 app.get("/me", authMiddleware, getMe);
 app.get("/me/platform-access", authMiddleware, getPlatformAccess);
+app.use("/", preferencesRoutes);  // Mounts /me/preferences routes
 app.use("/playlists", playlistRoutes);
 app.use("/search", searchRoutes);
 app.use("/spotify", spotifyRoutes);

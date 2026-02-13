@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/design_system.dart';
 import '../../core/theme_provider.dart';
+import '../../core/services/logout_service.dart';
 import '../../providers.dart';
 import '../auth/email_screen.dart';
 import '../playlists/playlist_home.dart';
@@ -228,9 +229,10 @@ class _ProfileTab extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       Navigator.pop(ctx);
-                      ref.read(authControllerProvider.notifier).logout();
+                      // Use LogoutService for complete state clearing
+                      await ref.read(logoutServiceProvider).logout();
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.error,

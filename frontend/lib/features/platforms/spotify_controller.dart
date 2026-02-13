@@ -201,6 +201,11 @@ class SpotifyController extends StateNotifier<AsyncValue<SpotifyState>> {
     }
   }
 
+  /// Clears all state. Called on logout to prevent state leaking between users.
+  void clearState() {
+    state = AsyncValue.data(SpotifyState.initial());
+  }
+
   String _requireToken() {
     final token = _token;
     if (token == null) {

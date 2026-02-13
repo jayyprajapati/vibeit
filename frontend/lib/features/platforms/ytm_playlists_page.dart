@@ -7,6 +7,10 @@ import 'ytm_controller.dart';
 import 'playlist_hero_banner.dart' as hero;
 import 'spotify_controller.dart';
 import '../../core/design_system.dart';
+import '../../core/services/playlist_action_resolver.dart';
+import '../sync/sync_bottom_sheet.dart';
+import '../transfer/transfer_sheet.dart';
+import '../../core/models/transfer.dart';
 
 class YtmPlaylistsPage extends ConsumerWidget {
   const YtmPlaylistsPage({super.key});
@@ -111,6 +115,10 @@ class YtmPlaylistsPage extends ConsumerWidget {
                     );
                   }
 
+                  // Get Spotify playlists for action resolution
+                  final spotifyPlaylists = spotifyState.valueOrNull?.playlists ?? [];
+                  final actionResolver = PlaylistActionResolver();
+
                   return SliverList(
                     delegate: SliverChildBuilderDelegate((context, index) {
                       final playlist = items[index];
@@ -118,15 +126,12 @@ class YtmPlaylistsPage extends ConsumerWidget {
                           playlist.source == PlatformPlaylistSource.ytm
                           ? 'items'
                           : 'tracks';
-                      final canTransfer =
-                          spotifyState.valueOrNull?.connected == true;
-                      final canSync = canTransfer;
-
-                      void showToast(String message) {
-                        ScaffoldMessenger.of(
-                          context,
-                        ).showSnackBar(SnackBar(content: Text(message)));
-                      }
+                      
+                      // Determine which action is available (at most one)
+                      final spotifyConnected = spotifyState.valueOrNull?.connected == true;
+                      final action = spotifyConnected
+                          ? actionResolver.resolveForYtm(playlist.name, spotifyPlaylists)
+                          : PlaylistAction.none;
 
                       return MouseRegion(
                         cursor: SystemMouseCursors.click,
@@ -191,26 +196,47 @@ class YtmPlaylistsPage extends ConsumerWidget {
                                     ],
                                   ),
                                 ),
-                                if (canSync)
+                                // SYNC button - only if playlist exists on BOTH platforms
+                                if (action == PlaylistAction.sync)
                                   MouseRegion(
                                     cursor: SystemMouseCursors.click,
                                     child: IconButton(
                                       tooltip: 'Sync playlist',
-                                      onPressed: () =>
-                                          showToast('Sync coming soon'),
+                                      onPressed: () {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Theme.of(context).colorScheme.surface,
+                                          builder: (_) => SyncBottomSheet(
+                                            playlistName: playlist.name,
+                                            sourcePlatform: SyncSourcePlatform.ytm,
+                                          ),
+                                        );
+                                      },
                                       icon: Icon(
                                         Icons.autorenew_rounded,
                                         color: playlist.source.accentColor,
                                       ),
                                     ),
                                   ),
-                                if (canTransfer)
+                                // TRANSFER button - only if playlist exists on ONE platform  
+                                if (action == PlaylistAction.transfer)
                                   MouseRegion(
                                     cursor: SystemMouseCursors.click,
                                     child: IconButton(
-                                      tooltip: 'Transfer playlist',
-                                      onPressed: () =>
-                                          showToast('Transfer coming soon'),
+                                      tooltip: 'Transfer to Spotify',
+                                      onPressed: () {
+                                        showModalBottomSheet(
+                                          context: context,
+                                          isScrollControlled: true,
+                                          backgroundColor: Theme.of(context).colorScheme.surface,
+                                          builder: (_) => TransferBottomSheet(
+                                            playlistId: playlist.id,
+                                            playlistName: playlist.name,
+                                            forcedDestination: TransferPlatform.spotify,
+                                          ),
+                                        );
+                                      },
                                       icon: const Icon(
                                         Icons.arrow_outward_rounded,
                                         color: AppColors.textPrimary,
