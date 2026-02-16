@@ -338,6 +338,24 @@ class ApiClient {
     return jsonDecode(resp.body) as Map<String, dynamic>;
   }
 
+  // ── Disconnect ────────────────────────────────────────────────────
+
+  Future<void> disconnectSpotify(String token) async {
+    final resp = await _client.delete(
+      Uri.parse('$baseUrl/spotify/disconnect'),
+      headers: _headers(token: token),
+    );
+    _throwIfNeeded(resp);
+  }
+
+  Future<void> disconnectYtm(String token) async {
+    final resp = await _client.delete(
+      Uri.parse('$baseUrl/ytm/disconnect'),
+      headers: _headers(token: token),
+    );
+    _throwIfNeeded(resp);
+  }
+
   void _throwIfNeeded(http.Response resp) {
     if (resp.statusCode >= 200 && resp.statusCode < 300) {
       return;

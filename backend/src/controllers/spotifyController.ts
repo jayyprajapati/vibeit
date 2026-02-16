@@ -112,7 +112,8 @@ const ensureAccessToken = async (userId: string) => {
     return account.accessToken;
   } catch (error) {
     if (error instanceof SpotifyReauthRequiredError) {
-      console.warn("[spotify] Refresh token invalid, requires reauth", error);
+      console.warn("[spotify] Refresh token invalid, deleting stale account", error);
+      await SpotifyAccount.deleteOne({ userId });
       throw new ReauthRequiredError("Spotify session expired. Please reconnect.");
     }
 
@@ -518,6 +519,25 @@ export const importSpotifyPlaylist = async (req: Request, res: Response, next: N
       return res.status(401).json({ error: "Spotify access token expired. Please reconnect." });
     }
 
+    return next(error);
+  }
+};
+
+export const disconnectSpotify = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const userObjectId = new Types.ObjectId(userId);
+    await Promise.all([
+      SpotifyAccount.deleteOne({ userId }),
+      SpotifyPlaylist.deleteMany({ userId: userObjectId }),
+    ]);
+
+    return res.json({ disconnected: true });
+  } catch (error) {
     return next(error);
   }
 };

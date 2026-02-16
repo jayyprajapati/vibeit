@@ -91,24 +91,25 @@ class YtmState {
 
 class YtmController extends StateNotifier<AsyncValue<YtmState>> {
   YtmController(this._ref, this._repo) : super(const AsyncValue.loading()) {
-    _bootstrap();
+    // Don't auto-fetch playlists — set initial state and let the UI call load()
+    // when the user navigates to the Platforms tab.
+    state = AsyncValue.data(YtmState.initial());
   }
 
   final Ref _ref;
   final YtmRepository _repo;
+  Future<void>? _loadFuture; // in-flight dedup
 
   String? get _token => _ref.read(authControllerProvider).valueOrNull?.token;
 
-  Future<void> _bootstrap() async {
-    final token = _token;
-    if (token == null) {
-      state = AsyncValue.data(YtmState.initial());
-      return;
-    }
-    await load();
+  /// Loads playlists from the backend. Deduplicates concurrent calls.
+  Future<void> load() {
+    // If a load is already in-flight, return the existing future
+    _loadFuture ??= _doLoad().whenComplete(() => _loadFuture = null);
+    return _loadFuture!;
   }
 
-  Future<void> load() async {
+  Future<void> _doLoad() async {
     final token = _token;
     if (token == null) {
       state = AsyncValue.data(YtmState.initial());
@@ -203,6 +204,31 @@ class YtmController extends StateNotifier<AsyncValue<YtmState>> {
 
   /// Clears all state. Called on logout to prevent state leaking between users.
   void clearState() {
+    _loadFuture = null;
+    state = AsyncValue.data(YtmState.initial());
+  }
+
+  /// Aligns the connection flag with platform-access truth without
+  /// waiting for a playlist fetch. Used when platform access loads first.
+  void applyConnectionStatus({required bool connected}) {
+    final current = state.valueOrNull ?? YtmState.initial();
+
+    if (!connected) {
+      _loadFuture = null;
+      state = AsyncValue.data(YtmState.initial());
+      return;
+    }
+
+    if (!current.connected) {
+      state = AsyncValue.data(current.copyWith(connected: true));
+    }
+  }
+
+  /// Disconnects YTM from the backend and resets local state.
+  Future<void> disconnect() async {
+    final token = _requireToken();
+    await _repo.disconnect(token);
+    _loadFuture = null;
     state = AsyncValue.data(YtmState.initial());
   }
 

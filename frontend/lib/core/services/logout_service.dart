@@ -16,12 +16,16 @@ class LogoutService {
   final Ref _ref;
 
   /// Performs complete logout:
-  /// 1. Clears all user-specific controller states
+  /// 1. Clears session-scoped controller states (sync, platform UI state)
   /// 2. Resets theme to default
   /// 3. Clears user-scoped cache
   /// 4. Logs out from auth
+  /// 
+  /// NOTE: Platform connection state is backend-owned. We clear the in-memory
+  /// controller state so the next user starts fresh, but we do NOT call
+  /// disconnect — the OAuth tokens remain valid for the next login.
   Future<void> logout() async {
-    // Clear all user-specific state from controllers
+    // Clear session-scoped state from controllers
     _ref.read(spotifyControllerProvider.notifier).clearState();
     _ref.read(ytmControllerProvider.notifier).clearState();
     _ref.read(syncControllerProvider.notifier).clearState();

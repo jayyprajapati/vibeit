@@ -30,4 +30,8 @@ class YtmRepository {
     final data = await apiClient.getYtmPlaylistDetail(token, playlistId);
     return PlatformPlaylistDetail.fromJson(data);
   }
+
+  Future<void> disconnect(String token) {
+    return apiClient.disconnectYtm(token);
+  }
 }

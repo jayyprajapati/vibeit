@@ -24,6 +24,16 @@ class PlatformsTab extends ConsumerStatefulWidget {
 class _PlatformsTabState extends ConsumerState<PlatformsTab> {
   _PlatformView _active = _PlatformView.spotify;
 
+  @override
+  void initState() {
+    super.initState();
+    // Lazy-load playlists only when user navigates to this tab
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(spotifyControllerProvider.notifier).load();
+      ref.read(ytmControllerProvider.notifier).load();
+    });
+  }
+
   Future<void> _refreshPlatformCaches() async {
     try {
       await Future.wait([

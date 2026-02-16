@@ -253,6 +253,86 @@ class _ProfileTab extends ConsumerWidget {
     );
   }
 
+  void _showDisconnectSheet(
+    BuildContext context,
+    WidgetRef ref,
+    PlatformKind platform,
+  ) {
+    final platformName = platform == PlatformKind.spotify
+        ? 'Spotify'
+        : 'YouTube Music';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).dividerColor,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'Disconnect $platformName?',
+              style: Theme.of(
+                ctx,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'This will remove your $platformName connection and cached playlists. You can reconnect anytime.',
+              style: Theme.of(ctx).textTheme.bodyMedium,
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 24),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    style: AppButtonStyles.subtle,
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      Navigator.pop(ctx);
+                      await ref
+                          .read(platformAccessControllerProvider.notifier)
+                          .disconnect(platform);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: Colors.white,
+                      minimumSize: const Size(0, 48),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: Text('Disconnect $platformName'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(authControllerProvider);
@@ -443,10 +523,15 @@ class _ProfileTab extends ConsumerWidget {
                       isConnected:
                           accessState.access?.spotify.connected ?? false,
                       isLoading:
-                          accessState.isLoading || accessState.isLaunching,
+                          accessState.isLoading || accessState.isLaunching || accessState.isDisconnecting,
                       onTap: () => accessController.requestAuth(
                         PlatformKind.spotify,
                         ScopeLevel.write,
+                      ),
+                      onDisconnect: () => _showDisconnectSheet(
+                        context,
+                        ref,
+                        PlatformKind.spotify,
                       ),
                     ),
                   ),
@@ -458,10 +543,15 @@ class _ProfileTab extends ConsumerWidget {
                       brandColor: AppColors.ytmRed,
                       isConnected: accessState.access?.ytm.connected ?? false,
                       isLoading:
-                          accessState.isLoading || accessState.isLaunching,
+                          accessState.isLoading || accessState.isLaunching || accessState.isDisconnecting,
                       onTap: () => accessController.requestAuth(
                         PlatformKind.ytm,
                         ScopeLevel.write,
+                      ),
+                      onDisconnect: () => _showDisconnectSheet(
+                        context,
+                        ref,
+                        PlatformKind.ytm,
                       ),
                     ),
                   ),
@@ -693,6 +783,7 @@ class _ConnectTile extends StatelessWidget {
     required this.isConnected,
     required this.isLoading,
     required this.onTap,
+    this.onDisconnect,
   });
 
   final String label;
@@ -701,6 +792,7 @@ class _ConnectTile extends StatelessWidget {
   final bool isConnected;
   final bool isLoading;
   final VoidCallback onTap;
+  final VoidCallback? onDisconnect;
 
   @override
   Widget build(BuildContext context) {
@@ -709,7 +801,7 @@ class _ConnectTile extends StatelessWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return GestureDetector(
-      onTap: isLoading ? null : onTap,
+      onTap: isLoading ? null : (isConnected ? null : onTap),
       child: Container(
         padding: const EdgeInsets.all(14),
         height: 118,
@@ -774,27 +866,46 @@ class _ConnectTile extends StatelessWidget {
             Row(
               children: [
                 const Spacer(),
-                TextButton.icon(
-                  onPressed: isLoading ? null : onTap,
-                  style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 6,
+                if (isConnected && onDisconnect != null)
+                  TextButton.icon(
+                    onPressed: isLoading ? null : onDisconnect,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: Colors.white.withValues(alpha: 0.9),
+                      textStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: isConnected ? Colors.white : brandColor,
-                    textStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w700,
+                    icon: const Icon(Icons.link_off_rounded, size: 16, color: Colors.white),
+                    label: const Text('Disconnect'),
+                  )
+                else
+                  TextButton.icon(
+                    onPressed: isLoading ? null : onTap,
+                    style: TextButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      foregroundColor: isConnected ? Colors.white : brandColor,
+                      textStyle: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
+                    icon: Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: isConnected ? Colors.white : brandColor,
+                    ),
+                    label: const Text('Connect'),
                   ),
-                  icon: Icon(
-                    Icons.arrow_forward_rounded,
-                    size: 16,
-                    color: isConnected ? Colors.white : brandColor,
-                  ),
-                  label: const Text('Connect'),
-                ),
               ],
             ),
           ],

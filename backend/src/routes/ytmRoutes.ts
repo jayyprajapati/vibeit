@@ -7,6 +7,7 @@ import {
 	importYtmPlaylist,
 	syncYtmNow,
 	ytmCallback,
+	disconnectYtm,
 } from "../controllers/ytmController";
 
 const router = Router();
@@ -17,5 +18,6 @@ router.get("/playlists", authMiddleware, getYtmPlaylists);
 router.get("/playlists/:ytmPlaylistId", authMiddleware, getYtmPlaylistDetail);
 router.post("/sync-now", authMiddleware, syncYtmNow);
 router.post("/import/:ytmPlaylistId", authMiddleware, importYtmPlaylist);
+router.delete("/disconnect", authMiddleware, disconnectYtm);
 
 export default router;

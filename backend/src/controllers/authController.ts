@@ -77,7 +77,24 @@ export const verifyOtp = async (req: Request, res: Response, next: NextFunction)
 
     const token = signToken({ userId: user._id.toString(), email: user.email });
 
-    return res.json({ token, user: serializeUser(user) });
+    // Include platform access in login response so frontend gets connection state immediately
+    const [spotify, ytm] = await Promise.all([
+      SpotifyAccount.findOne({ userId: user._id }),
+      YtmAccount.findOne({ userId: user._id }),
+    ]);
+
+    const platformAccess = {
+      spotify: {
+        connected: !!spotify,
+        scopeLevel: spotify?.scopeLevel || "NONE",
+      },
+      ytm: {
+        connected: !!ytm,
+        scopeLevel: ytm?.scopeLevel || "NONE",
+      },
+    };
+
+    return res.json({ token, user: serializeUser(user), platformAccess });
   } catch (error) {
     return next(error);
   }

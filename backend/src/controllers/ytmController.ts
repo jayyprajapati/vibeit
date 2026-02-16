@@ -123,7 +123,8 @@ const ensureAccessToken = async (userId: string) => {
     return account.accessToken;
   } catch (error) {
     if (error instanceof YtmReauthRequiredError) {
-      console.warn("[ytm] Refresh token invalid, requires reauth", error);
+      console.warn("[ytm] Refresh token invalid, deleting stale account", error);
+      await YtmAccount.deleteOne({ userId });
       throw new ReauthRequiredError("YouTube Music session expired. Please reconnect.");
     }
 
@@ -351,7 +352,15 @@ export const getYtmPlaylists = async (req: Request, res: Response, next: NextFun
       });
     }
 
-    await incrementUsageOrThrow(userId);
+    // Only increment usage when we will actually hit the external API (no fresh cache)
+    const userObjectId = new Types.ObjectId(userId);
+    const latest = await YtmPlaylist.findOne({ userId: userObjectId }).sort({ lastFetchedAt: -1 }).select("lastFetchedAt");
+    const lastSyncedAt = latest?.lastFetchedAt ?? null;
+    const hasFreshCache = !!lastSyncedAt && Date.now() - lastSyncedAt.getTime() < CACHE_TTL_MS;
+    if (!hasFreshCache) {
+      await incrementUsageOrThrow(userId);
+    }
+
     const response = await fetchAndCachePlaylists(userId, false);
     return res.json(response);
   } catch (error) {
@@ -554,6 +563,25 @@ export const importYtmPlaylist = async (req: Request, res: Response, next: NextF
     if (error instanceof YtmTokenExpiredError) {
       return res.status(401).json({ error: error.message });
     }
+    return next(error);
+  }
+};
+
+export const disconnectYtm = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const userObjectId = new Types.ObjectId(userId);
+    await Promise.all([
+      YtmAccount.deleteOne({ userId }),
+      YtmPlaylist.deleteMany({ userId: userObjectId }),
+    ]);
+
+    return res.json({ disconnected: true });
+  } catch (error) {
     return next(error);
   }
 };

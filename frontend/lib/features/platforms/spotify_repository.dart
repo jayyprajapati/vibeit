@@ -30,4 +30,8 @@ class SpotifyRepository {
     final data = await apiClient.getSpotifyPlaylistDetail(token, playlistId);
     return PlatformPlaylistDetail.fromJson(data);
   }
+
+  Future<void> disconnect(String token) {
+    return apiClient.disconnectSpotify(token);
+  }
 }

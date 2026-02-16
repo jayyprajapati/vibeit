@@ -6,6 +6,7 @@ import 'playlist_detail_screen.dart';
 import '../platforms/playlist_hero_banner.dart';
 import '../../core/models/playlist.dart';
 import '../../core/models/transfer.dart';
+import '../auth/platform_access_controller.dart';
 import '../../core/design_system.dart';
 import '../platforms/platform_playlist_models.dart';
 import '../platforms/platform_playlist_detail_page.dart';
@@ -91,8 +92,10 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     AsyncValue<List<Playlist>> state,
     PlaylistController controller,
     AsyncValue<SpotifyState> spotifyState,
-    AsyncValue<YtmState> ytmState,
-  ) {
+    AsyncValue<YtmState> ytmState, {
+    required bool spotifyConnected,
+    required bool ytmConnected,
+  }) {
     return state.when(
       loading: () =>
           const _SectionCard(child: Center(child: CircularProgressIndicator())),
@@ -112,12 +115,12 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           );
         }
 
-        final spotifyNames = (spotifyState.valueOrNull?.connected ?? false)
+        final spotifyNames = spotifyConnected
             ? spotifyState.value!.playlists
                   .map((p) => _normalizeName(p.name))
                   .toSet()
             : <String>{};
-        final ytmNames = (ytmState.valueOrNull?.connected ?? false)
+        final ytmNames = ytmConnected
             ? ytmState.value!.playlists
                   .map((p) => _normalizeName(p.name))
                   .toSet()
@@ -185,7 +188,10 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     );
   }
 
-  Widget _buildSpotifySection(AsyncValue<SpotifyState> state) {
+  Widget _buildSpotifySection(
+    AsyncValue<SpotifyState> state, {
+    required bool connected,
+  }) {
     final controller = ref.read(spotifyControllerProvider.notifier);
 
     return state.when(
@@ -199,7 +205,7 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
         ),
       ),
       data: (data) {
-        if (!data.connected) {
+        if (!connected) {
           return _SectionCard(
             child: _ConnectPrompt(
               label: 'Connect Spotify',
@@ -254,7 +260,10 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     );
   }
 
-  Widget _buildYtmSection(AsyncValue<YtmState> state) {
+  Widget _buildYtmSection(
+    AsyncValue<YtmState> state, {
+    required bool connected,
+  }) {
     final controller = ref.read(ytmControllerProvider.notifier);
 
     return state.when(
@@ -268,7 +277,7 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
         ),
       ),
       data: (data) {
-        if (!data.connected) {
+        if (!connected) {
           return _SectionCard(
             child: _ConnectPrompt(
               label: 'Connect YouTube Music',
@@ -375,13 +384,18 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
     final playlistsState = ref.watch(playlistControllerProvider);
     final spotifyState = ref.watch(spotifyControllerProvider);
     final ytmState = ref.watch(ytmControllerProvider);
+    final connections = ref.watch(platformConnectionStatusProvider);
     final playlistController = ref.read(playlistControllerProvider.notifier);
+    final accessController = ref.read(
+      platformAccessControllerProvider.notifier,
+    );
 
     Future<void> refreshAll() async {
       await Future.wait([
         playlistController.loadPlaylists(),
         ref.read(spotifyControllerProvider.notifier).load(),
         ref.read(ytmControllerProvider.notifier).load(),
+        accessController.load(),
       ]);
     }
 
@@ -411,6 +425,8 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
                 playlistController,
                 spotifyState,
                 ytmState,
+                spotifyConnected: connections.spotifyConnected,
+                ytmConnected: connections.ytmConnected,
               ),
             ),
           ),
@@ -427,7 +443,10 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
-              child: _buildSpotifySection(spotifyState),
+              child: _buildSpotifySection(
+                spotifyState,
+                connected: connections.spotifyConnected,
+              ),
             ),
           ),
           const SliverToBoxAdapter(child: SizedBox(height: 30)),
@@ -443,7 +462,10 @@ class _PlaylistHomeTabState extends ConsumerState<PlaylistHomeTab> {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-              child: _buildYtmSection(ytmState),
+              child: _buildYtmSection(
+                ytmState,
+                connected: connections.ytmConnected,
+              ),
             ),
           ),
         ],

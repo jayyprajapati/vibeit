@@ -5,6 +5,7 @@ import '../../core/design_system.dart';
 import '../../core/models/spotify.dart';
 import '../../core/models/sync.dart';
 import '../../core/models/ytm.dart';
+import '../auth/platform_access_controller.dart';
 import '../platforms/spotify_controller.dart';
 import '../platforms/sync_controller.dart';
 import '../platforms/ytm_controller.dart';
@@ -35,12 +36,20 @@ class SyncTab extends ConsumerWidget {
     final spotifyState = ref.watch(spotifyControllerProvider);
     final ytmState = ref.watch(ytmControllerProvider);
     final syncState = ref.watch(syncControllerProvider);
+    final connections = ref.watch(platformConnectionStatusProvider);
     final spotifyController = ref.read(spotifyControllerProvider.notifier);
     final ytmController = ref.read(ytmControllerProvider.notifier);
+    final accessController = ref.read(
+      platformAccessControllerProvider.notifier,
+    );
 
     return RefreshIndicator(
       onRefresh: () async {
-        await Future.wait([spotifyController.load(), ytmController.load()]);
+        await Future.wait([
+          spotifyController.load(),
+          ytmController.load(),
+          accessController.load(),
+        ]);
       },
       color: Theme.of(context).colorScheme.primary,
       child: ListView(
@@ -57,12 +66,17 @@ class SyncTab extends ConsumerWidget {
             style: TextStyle(color: Colors.grey),
           ),
           const SizedBox(height: 16),
-          _ConnectionStrip(spotifyState: spotifyState, ytmState: ytmState),
+          _ConnectionStrip(
+            spotifyState: spotifyState,
+            ytmState: ytmState,
+            connections: connections,
+          ),
           const SizedBox(height: 16),
           _SyncPanel(
             spotifyState: spotifyState,
             ytmState: ytmState,
             syncState: syncState,
+            connections: connections,
           ),
         ],
       ),
@@ -71,10 +85,15 @@ class SyncTab extends ConsumerWidget {
 }
 
 class _ConnectionStrip extends StatelessWidget {
-  const _ConnectionStrip({required this.spotifyState, required this.ytmState});
+  const _ConnectionStrip({
+    required this.spotifyState,
+    required this.ytmState,
+    required this.connections,
+  });
 
   final AsyncValue<SpotifyState> spotifyState;
   final AsyncValue<YtmState> ytmState;
+  final PlatformConnectionStatus connections;
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +104,7 @@ class _ConnectionStrip extends StatelessWidget {
             context,
             'Spotify',
             Icons.music_note,
-            spotifyState.valueOrNull?.connected ?? false,
+            connections.spotifyConnected,
             spotifyState.valueOrNull?.lastSyncedAt,
           ),
         ),
@@ -95,7 +114,7 @@ class _ConnectionStrip extends StatelessWidget {
             context,
             'YouTube Music',
             Icons.play_circle_fill,
-            ytmState.valueOrNull?.connected ?? false,
+            connections.ytmConnected,
             ytmState.valueOrNull?.lastSyncedAt,
           ),
         ),
@@ -149,11 +168,13 @@ class _SyncPanel extends ConsumerWidget {
     required this.spotifyState,
     required this.ytmState,
     required this.syncState,
+    required this.connections,
   });
 
   final AsyncValue<SpotifyState> spotifyState;
   final AsyncValue<YtmState> ytmState;
   final SyncState syncState;
+  final PlatformConnectionStatus connections;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -175,7 +196,7 @@ class _SyncPanel extends ConsumerWidget {
       );
     }
 
-    if (!spotify.connected || !ytm.connected) {
+    if (!connections.spotifyConnected || !connections.ytmConnected) {
       return const _InfoCard(
         title: 'Connect both platforms',
         body: 'Connect Spotify and YouTube Music to preview and run syncs.',
