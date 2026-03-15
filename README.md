@@ -1,4 +1,4 @@
-# Vibeit Monorepo
+# DotBeats Monorepo
 
 Flutter + Node/Express stack for OTP auth and an internal playlist system (no external music services).
 
